@@ -5,6 +5,7 @@ let comics = [];
 let currentPublisher = "Tous";
 let currentTeam = "Toutes";
 let currentPeriod = "Toutes";
+let onlyIssueOne = false;
 let currentPage = 1;
 
 const ZOOM_FACTOR = 1.8;
@@ -163,6 +164,11 @@ function formatIssueNum(num) {
   return n.startsWith("#") ? n : `#${n}`;
 }
 
+function hasIssueOne(c) {
+  const v = clean(c["#1"]);
+  return v === "1" || v === "#1";
+}
+
 function parseDate(s) {
   const v = clean(s);
   if (!v) return NaN;
@@ -188,12 +194,16 @@ function issueNum(s) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function publisherList() {
-  return [...new Set(comics.map(c => clean(c.Editeur)).filter(Boolean))]
+function getScopeBase() {
+  return onlyIssueOne ? comics.filter(hasIssueOne) : comics;
+}
+
+function publisherList(baseList = getScopeBase()) {
+  return [...new Set(baseList.map(c => clean(c.Editeur)).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "fr"));
 }
 
-function teamList(baseList = comics) {
+function teamList(baseList = getScopeBase()) {
   const counts = {};
   baseList.forEach(c => {
     const eq = clean(c.Equipe);
@@ -204,7 +214,7 @@ function teamList(baseList = comics) {
     .map(([name, count]) => ({ name, count }));
 }
 
-function periodList(baseList = comics) {
+function periodList(baseList = getScopeBase()) {
   const counts = {};
   baseList.forEach(c => {
     const per = clean(c.Periode);
@@ -218,10 +228,11 @@ function periodList(baseList = comics) {
 function getFiltered() {
   const q = $("search") ? $("search").value.toLocaleLowerCase("fr").trim() : "";
   let list = comics.filter(c => {
+    const oneOk = !onlyIssueOne || hasIssueOne(c);
     const pubOk = currentPublisher === "Tous" || clean(c.Editeur) === currentPublisher;
     const teamOk = currentTeam === "Toutes" || clean(c.Equipe) === currentTeam;
     const periodOk = currentPeriod === "Toutes" || clean(c.Periode) === currentPeriod;
-    return pubOk && teamOk && periodOk;
+    return oneOk && pubOk && teamOk && periodOk;
   });
 
   if (q) {
@@ -263,12 +274,46 @@ function getFiltered() {
   return list;
 }
 
+function ensureIssueOneFilterButton() {
+  let btn = $("issue-one-filter-btn");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "issue-one-filter-btn";
+    btn.className = "issue-one-filter-btn";
+    btn.title = "Afficher uniquement les comics où la colonne O vaut 1";
+
+    const anchor = $("sort")?.parentElement || $("search")?.parentElement || $("result-count")?.parentElement;
+    if (anchor) {
+      anchor.appendChild(btn);
+    } else if ($("tabs")?.parentElement) {
+      $("tabs").parentElement.insertBefore(btn, $("tabs"));
+    }
+
+    btn.addEventListener("click", () => {
+      onlyIssueOne = !onlyIssueOne;
+      currentPublisher = "Tous";
+      currentTeam = "Toutes";
+      currentPeriod = "Toutes";
+      currentPage = 1;
+      renderAllFilters();
+      renderGrid();
+    });
+  }
+
+  const totalOne = comics.filter(hasIssueOne).length;
+  btn.classList.toggle("is-active", onlyIssueOne);
+  btn.setAttribute("aria-pressed", String(onlyIssueOne));
+  btn.innerHTML = `<span>✦ #1</span><small>${totalOne}</small>`;
+}
+
 function renderStats() {
-  const pub = publisherList();
-  const teams = new Set(comics.map(c => clean(c.Equipe)).filter(Boolean));
-  const periods = new Set(comics.map(c => clean(c.Periode)).filter(Boolean));
+  const base = getScopeBase();
+  const pub = publisherList(base);
+  const teams = new Set(base.map(c => clean(c.Equipe)).filter(Boolean));
+  const periods = new Set(base.map(c => clean(c.Periode)).filter(Boolean));
   $("stats").innerHTML = `
-    <div class="stat"><strong>${comics.length.toLocaleString("fr-FR")}</strong><span>Comics lus</span></div>
+    <div class="stat"><strong>${base.length.toLocaleString("fr-FR")}</strong><span>${onlyIssueOne ? "Numéros #1" : "Comics lus"}</span></div>
     <div class="stat"><strong>${pub.length}</strong><span>Éditeurs</span></div>
     <div class="stat"><strong>${teams.size.toLocaleString("fr-FR")}</strong><span>Équipes</span></div>
     <div class="stat"><strong>${periods.size.toLocaleString("fr-FR")}</strong><span>Périodes</span></div>
@@ -276,14 +321,20 @@ function renderStats() {
 }
 
 function renderTabs() {
+  const base = getScopeBase();
+  const pubs = publisherList(base);
+  if (currentPublisher !== "Tous" && !pubs.includes(currentPublisher)) {
+    currentPublisher = "Tous";
+  }
+
   const counts = {};
-  comics.forEach(c => {
+  base.forEach(c => {
     const p = clean(c.Editeur);
     if (p) counts[p] = (counts[p] || 0) + 1;
   });
 
-  $("tabs").innerHTML = ["Tous", ...publisherList()]
-    .map(p => `<button class="tab ${p === currentPublisher ? "active" : ""}" data-publisher="${esc(p)}">${esc(p)}<small>${p === "Tous" ? comics.length : counts[p]}</small></button>`)
+  $("tabs").innerHTML = ["Tous", ...pubs]
+    .map(p => `<button class="tab ${p === currentPublisher ? "active" : ""}" data-publisher="${esc(p)}">${esc(p)}<small>${p === "Tous" ? base.length : counts[p]}</small></button>`)
     .join("");
 
   $("tabs").querySelectorAll("button").forEach(b => {
@@ -303,9 +354,10 @@ function renderTabs() {
 function renderTeamTabs() {
   const teamEl = $("team-tabs");
   if (!teamEl) return;
+  const base = getScopeBase();
   const scoped = currentPublisher === "Tous"
-    ? comics
-    : comics.filter(c => clean(c.Editeur) === currentPublisher);
+    ? base
+    : base.filter(c => clean(c.Editeur) === currentPublisher);
   const teams = teamList(scoped);
   if (currentTeam !== "Toutes" && !teams.some(t => t.name === currentTeam)) {
     currentTeam = "Toutes";
@@ -332,7 +384,8 @@ function renderTeamTabs() {
 function renderPeriodTabs() {
   const periodEl = $("period-tabs");
   if (!periodEl) return;
-  const scoped = comics.filter(c => {
+  const base = getScopeBase();
+  const scoped = base.filter(c => {
     const pubOk = currentPublisher === "Tous" || clean(c.Editeur) === currentPublisher;
     const teamOk = currentTeam === "Toutes" || clean(c.Equipe) === currentTeam;
     return pubOk && teamOk;
@@ -358,6 +411,14 @@ function renderPeriodTabs() {
   });
 }
 
+function renderAllFilters() {
+  ensureIssueOneFilterButton();
+  renderStats();
+  renderTabs();
+  renderTeamTabs();
+  renderPeriodTabs();
+}
+
 function publisherColor(pub) {
   const p = clean(pub).toLowerCase();
   if (p.includes("marvel")) return "rgba(237, 29, 36, 0.35)";
@@ -380,11 +441,6 @@ function placeholder(c) {
 function isReread(c) {
   const v = clean(c["lu 2 fois"]).toLowerCase();
   return v && v !== "non" && v !== "0" && v !== "false";
-}
-
-function hasIssueOne(c) {
-  const v = clean(c["#1"]);
-  return v === "1" || v === "#1";
 }
 
 function card(c, index) {
@@ -727,10 +783,7 @@ async function loadComics() {
       status.classList.add("connected");
     }
     if (dot) dot.classList.add("connected");
-    renderStats();
-    renderTabs();
-    renderTeamTabs();
-    renderPeriodTabs();
+    renderAllFilters();
     renderGrid();
   } catch (err) {
     if (status) {
