@@ -797,3 +797,21 @@ dialog[open] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+.sub-tabs {
+  padding-top: 0;
+  padding-bottom: 14px;
+  margin-top: -6px;
+}
+
+.sub-tabs .tab {
+  padding: 7px 13px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.sub-tabs .tab.active {
+  background: #2b3042;
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+  box-shadow: none;
+}
