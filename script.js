@@ -81,6 +81,15 @@ function findColIndex(headers, candidates) {
   return -1;
 }
 
+function findExactColIndex(headers, candidates) {
+  const normHeaders = headers.map(h => clean(h).toLowerCase().replace(/\s+/g, ""));
+  for (const cand of candidates) {
+    const idx = normHeaders.indexOf(cand.toLowerCase().replace(/\s+/g, ""));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
 function rowsToComics(csv) {
   const rows = parseCSV(csv);
   if (rows.length < 2) {
@@ -103,7 +112,7 @@ function rowsToComics(csv) {
     Covers: findColIndex(headers, ["Covers", "Cover", "Jaquette"]),
     Planche: findColIndex(headers, ["Planche", "Planches"]),
     "lu 2 fois": findColIndex(headers, ["lu 2 fois", "lu2fois"]),
-    "#1": findColIndex(headers, ["#1", "1", "n°1", "numero1"])
+    "#1": findExactColIndex(headers, ["#1", "1"])
   };
 
   if (colMap.Titre === -1 || colMap.Editeur === -1) {
@@ -360,8 +369,7 @@ function isReread(c) {
 }
 
 function hasIssueOne(c) {
-  const v = clean(c["#1"]).toLowerCase();
-  return v !== "" && v !== "non" && v !== "0" && v !== "false" && v !== "-";
+  return clean(c["#1"]) === "1";
 }
 
 function card(c, index) {
