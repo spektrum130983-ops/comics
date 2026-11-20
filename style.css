@@ -1199,3 +1199,26 @@ dialog[open] {
     height: 260px;
   }
 }
+.cover-num-caption {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: center;
+}
+
+.detail-issue-prefix {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.78em;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  vertical-align: middle;
+}
