@@ -1,26 +1,28 @@
-# Comicshelf — bibliothèque personnelle
+# Comicshelf — connexion Google Sheets
 
-Site statique personnalisé à partir du CSV fourni.
+Le site lit directement l'onglet `gid=0` de la feuille Google Sheets configurée dans `script.js`. Le navigateur recharge la feuille à chaque ouverture du site (cache désactivé).
 
-## Contenu
-- `index.html` : structure du site
-- `style.css` : thème sombre responsive
-- `script.js` : filtres, recherche, tri, pagination et fiches détaillées
-- `comics.json` : les 1 654 entrées importées depuis le fichier CSV
+## Autoriser la lecture
+Dans Google Sheets :
+1. Ouvre la feuille.
+2. Clique sur **Partager**.
+3. Dans **Accès général**, sélectionne **Tous les utilisateurs disposant du lien**.
+4. Choisis le rôle **Lecteur** (pas Éditeur).
+5. Enregistre.
 
-## Mise en ligne sur GitHub Pages
-1. Crée un dépôt GitHub (par exemple `comicshelf`).
-2. Envoie tous les fichiers de ce dossier à la racine du dépôt.
-3. Ouvre **Settings → Pages**.
-4. Dans **Build and deployment**, choisis **Deploy from a branch**.
-5. Sélectionne la branche `main` et le dossier `/ (root)`, puis sauvegarde.
-6. Attends la publication : GitHub affichera l'adresse de ton site dans la section Pages.
+Le site utilise un lien CSV de lecture Google Visualization. Il ne peut pas lire une feuille privée sans authentification. Ne publie pas de données confidentielles dans cette feuille.
 
-## Mise à jour des données
-Le site lit `comics.json`. Pour actualiser la collection, remplace ce fichier par un nouvel export JSON construit à partir du CSV, puis envoie le changement sur GitHub.
+## Déployer sur GitHub Pages
+1. Remplace les anciens fichiers par les fichiers de cette archive dans le dépôt GitHub.
+2. Conserve `index.html`, `style.css`, `script.js`, `comics.json` et ce README à la racine.
+3. Vérifie Settings → Pages → Deploy from a branch → `main` → `/ (root)`.
+4. Recharge le site après la publication. L'état en haut à droite doit indiquer « Connecté à Google Sheets ».
 
-## À savoir
-- Les colonnes importées sont les 14 premières colonnes du CSV, correspondant aux champs de comics.
-- Les colonnes de notes/statistiques annexes présentes à droite du tableau n'ont pas été interprétées comme des comics.
-- Les 19 URL de jaquettes présentes dans le CSV sont conservées. Les autres entrées affichent une couverture de remplacement avec le titre et l'éditeur.
-- Le site est une copie statique des données au moment de l'export : il ne se synchronise pas automatiquement avec Google Sheets.
+## Colonnes utilisées
+Date, Titre, num, vf, vo, Editeur, Equipe, Periode, Auteur, Dessinateur, Résumé, Covers, Planche, lu 2 fois.
+Les colonnes doivent conserver ces intitulés sur la première ligne de l'onglet `gid=0`.
+
+## Sécurité et limites
+- Connexion en lecture seule : le site n'écrit et ne modifie jamais la feuille.
+- Toute personne ayant accès au site peut consulter les données exposées par la feuille publique.
+- Si tu ne souhaites pas rendre la feuille accessible par lien, il faudra mettre en place une authentification (par exemple OAuth ou un backend Apps Script protégé). Ne mets jamais une clé API privée ou un secret dans le JavaScript public.
