@@ -815,3 +815,8 @@ dialog[open] {
   color: #fff;
   box-shadow: none;
 }
+.filter-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
