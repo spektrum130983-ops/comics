@@ -118,10 +118,17 @@ const sort = $("sort").value;
   list.sort((a, b) => {
     if (sort === "title") return clean(a.Titre).localeCompare(clean(b.Titre), "fr");
     if (sort === "number") return issueNum(a.num) - issueNum(b.num);
+
     const da = parseDate(a.Date);
     const db = parseDate(b.Date);
-    if (sort === "date-asc") return da - db;
-    return db - da;
+    const aValid = Number.isFinite(da);
+    const bValid = Number.isFinite(db);
+
+    if (!aValid && !bValid) return 0;
+    if (!aValid) return 1;
+    if (!bValid) return -1;
+
+    return sort === "date-asc" ? da - db : db - da;
   });
   return list;
 }
