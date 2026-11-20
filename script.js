@@ -7,122 +7,6 @@ const $ = id => document.getElementById(id);
 const clean = v => v == null ? "" : String(v).trim();
 const esc = s => clean(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// Cache local des couvertures trouvées sur le web
-const COVER_CACHE_KEY = "comicshelf_web_covers_v3";
-let coverCache = {};
-try {
-  coverCache = JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || "{}");
-} catch (_) {
-  coverCache = {};
-}
-const inFlightCovers = new Map();
-
-function saveCoverCache() {
-  try {
-    localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(coverCache));
-  } catch (_) {}
-}
-
-function comicCacheKey(c) {
-  return `${clean(c.Editeur)}|${clean(c.Titre)}|${clean(c.num)}|${clean(c.vo)}`.toLowerCase();
-}
-
-async function fetchFromOpenLibrary(c) {
-  const title = clean(c.Titre);
-  const num = clean(c.num).replace(/^#/, "");
-  const queryParts = [title, num ? `#${num}` : "", clean(c.Editeur)].filter(Boolean);
-  if (!queryParts.length) return null;
-  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(queryParts.join(" "))}&limit=5&fields=cover_i`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const data = await res.json();
-  const docs = Array.isArray(data.docs) ? data.docs : [];
-  const match = docs.find(d => d && d.cover_i);
-  return match ? `https://covers.openlibrary.org/b/id/${match.cover_i}-L.jpg?default=false` : null;
-}
-
-async function fetchFromWikipedia(c) {
-  const queries = [
-    `${clean(c.Titre)} ${clean(c.num) ? "#" + clean(c.num) : ""} comic`.trim(),
-    `${clean(c.vo)} comic`.trim(),
-    `${clean(c.Titre)} (${clean(c.Editeur)} Comics)`.trim()
-  ].filter(q => q.length > 6);
-
-  for (const q of queries) {
-    const url = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(q)}&gsrlimit=3&prop=pageimages&piprop=thumbnail&pithumbsize=500&format=json&origin=*`;
-    const res = await fetch(url);
-    if (!res.ok) continue;
-    const data = await res.json();
-    const pages = Object.values(data?.query?.pages || {});
-    const withImg = pages.find(p => p && p.thumbnail && p.thumbnail.source);
-    if (withImg) return withImg.thumbnail.source;
-  }
-  return null;
-}
-
-async function resolveWebCover(c) {
-  const key = comicCacheKey(c);
-  if (key in coverCache) return coverCache[key] || null;
-  if (inFlightCovers.has(key)) return inFlightCovers.get(key);
-
-  const task = (async () => {
-    let found = null;
-    try {
-      found = await fetchFromOpenLibrary(c);
-      if (!found) found = await fetchFromWikipedia(c);
-    } catch (_) {
-      found = null;
-    }
-    coverCache[key] = found || "";
-    saveCoverCache();
-    inFlightCovers.delete(key);
-    return found;
-  })();
-
-  inFlightCovers.set(key, task);
-  return task;
-}
-
-function hydrateMissingCovers(visibleComics) {
-  let active = 0;
-  const maxConcurrent = 6;
-  const queue = visibleComics
-    .map((c, idx) => ({ c, idx }))
-    .filter(({ c }) => !clean(c.Covers) && !(comicCacheKey(c) in coverCache));
-
-  function next() {
-    while (active < maxConcurrent && queue.length) {
-      const { c, idx } = queue.shift();
-      const slot = document.querySelector(`[data-cover-slot="${idx}"]`);
-      if (!slot) continue;
-      active++;
-      resolveWebCover(c)
-        .then(url => {
-          if (!url || !slot.isConnected) return;
-          c._resolvedCover = url;
-          const img = document.createElement("img");
-          img.src = url;
-          img.alt = `Couverture de ${clean(c.Titre) || "Comic"}`;
-          img.onload = () => {
-            if (img.naturalWidth > 20 && slot.isConnected) {
-              slot.querySelector(".cover-placeholder")?.remove();
-              slot.prepend(img);
-            }
-          };
-          img.onerror = () => {
-            coverCache[comicCacheKey(c)] = "";
-            saveCoverCache();
-          };
-        })
-        .finally(() => {
-          active--;
-          next();
-        });
-    }
-  }
-  next();
-}
-
 function parseCSV(text) {
   const rows = [];
   let row = [], field = "", quoted = false;
@@ -189,7 +73,7 @@ function renderStats() {
     <div class="stat"><strong>${comics.length.toLocaleString("fr-FR")}</strong><span>Comics lus</span></div>
     <div class="stat"><strong>${pub.length}</strong><span>Éditeurs</span></div>
     <div class="stat"><strong>${new Set(comics.map(c => clean(c.Titre)).filter(Boolean)).size.toLocaleString("fr-FR")}</strong><span>Séries / Titres</span></div>
-    <div class="stat"><strong>${comics.filter(c => clean(c.Covers)).length.toLocaleString("fr-FR")}</strong><span>Jaquettes Sheets</span></div>
+    <div class="stat"><strong>${comics.filter(c => clean(c.Covers)).length.toLocaleString("fr-FR")}</strong><span>Jaquettes disponibles</span></div>
   `;
 }
 
@@ -228,13 +112,13 @@ function isReread(c) {
   return v && v !== "non" && v !== "0" && v !== "false";
 }
 
-function card(c, index, slotIndex) {
+function card(c, index) {
   const title = clean(c.Titre) || "Sans titre";
-  const cover = clean(c.Covers) || c._resolvedCover || coverCache[comicCacheKey(c)] || "";
+  const cover = clean(c.Covers);
   return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(title)}">
-    <div class="cover" data-cover-slot="${slotIndex}">
+    <div class="cover">
       ${placeholder(c)}
-      ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(title)}">` : ""}
+      ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(title)}" loading="lazy">` : ""}
       ${c.num ? `<span class="issue">#${esc(c.num)}</span>` : ""}
       ${isReread(c) ? `<span class="reread-badge" title="Lu 2 fois">2×</span>` : ""}
     </div>
@@ -249,9 +133,7 @@ function bindCoverFallbacks() {
   $("grid").querySelectorAll(".comic-cover-img").forEach(img => {
     img.style.position = "relative";
     img.style.zIndex = "1";
-    img.addEventListener("error", () => {
-      img.remove();
-    }, { once: true });
+    img.addEventListener("error", () => img.remove(), { once: true });
   });
 }
 
@@ -259,7 +141,7 @@ function renderGrid() {
   const list = getFiltered(), pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   currentPage = Math.min(currentPage, pages);
   const start = (currentPage - 1) * PAGE_SIZE, visible = list.slice(start, start + PAGE_SIZE);
-  $("grid").innerHTML = visible.map((c, i) => card(c, start + i, i)).join("");
+  $("grid").innerHTML = visible.map((c, i) => card(c, start + i)).join("");
   bindCoverFallbacks();
   $("result-count").textContent = `${list.length.toLocaleString("fr-FR")} résultat${list.length > 1 ? "s" : ""}`;
   $("empty").hidden = list.length !== 0;
@@ -275,11 +157,9 @@ function renderGrid() {
     el.addEventListener("click", open);
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
   });
-
-  hydrateMissingCovers(visible);
 }
 
-async function showDetail(c) {
+function showDetail(c) {
   const fields = [
     ["Date de lecture", c.Date],
     ["Éditeur", c.Editeur],
@@ -291,10 +171,10 @@ async function showDetail(c) {
     ["Scénariste", c.Auteur],
     ["Dessinateur", c.Dessinateur]
   ];
-  const cover = clean(c.Covers) || c._resolvedCover || coverCache[comicCacheKey(c)] || "";
+  const cover = clean(c.Covers);
   $("detail-content").innerHTML = `
     <div class="detail-layout">
-      <div id="detail-cover-wrap">${cover ? `<img class="detail-cover" src="${esc(cover)}" alt="Couverture">` : `<div class="detail-cover">${placeholder(c)}</div>`}</div>
+      <div>${cover ? `<img class="detail-cover" src="${esc(cover)}" alt="Couverture">` : `<div class="detail-cover">${placeholder(c)}</div>`}</div>
       <div>
         <div class="detail-badges">
           ${c.Editeur ? `<span class="detail-badge">${esc(c.Editeur)}</span>` : ""}
@@ -319,14 +199,6 @@ async function showDetail(c) {
     }, { once: true });
   }
   $("detail-dialog").showModal();
-
-  if (!cover) {
-    const found = await resolveWebCover(c);
-    const wrap = $("detail-cover-wrap");
-    if (found && wrap && $("detail-dialog").open) {
-      wrap.innerHTML = `<img class="detail-cover" src="${esc(found)}" alt="Couverture">`;
-    }
-  }
 }
 
 $("dialog-close").addEventListener("click", () => $("detail-dialog").close());
