@@ -52,9 +52,12 @@ function getSheetCover(c) {
 }
 
 function parseDate(s) {
-  if (!s) return 0;
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0;
+  const v = clean(s);
+  if (!v) return 0;
+  let m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+  m = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : 0;
 }
 
 function issueNum(s) {
