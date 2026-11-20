@@ -90,6 +90,13 @@ function findExactColIndex(headers, candidates) {
   return -1;
 }
 
+function resolveNumColIndex(headers) {
+  const idx = findColIndex(headers, ["num", "numero", "numéro", "n°", "no"]);
+  if (idx !== -1) return idx;
+  // Colonne C dans Google Sheets = index 2 (A=0, B=1, C=2)
+  return headers.length > 2 ? 2 : -1;
+}
+
 function resolveIssueOneColIndex(headers) {
   const exactIdx = findExactColIndex(headers, ["#1", "1"]);
   if (exactIdx !== -1) return exactIdx;
@@ -107,7 +114,7 @@ function rowsToComics(csv) {
   const colMap = {
     Date: findColIndex(headers, ["Date"]),
     Titre: findColIndex(headers, ["Titre"]),
-    num: findColIndex(headers, ["num", "numero", "numéro", "n°", "no"]),
+    num: resolveNumColIndex(headers),
     vf: findColIndex(headers, ["vf"]),
     vo: findColIndex(headers, ["vo"]),
     Editeur: findColIndex(headers, ["Editeur", "Éditeur"]),
