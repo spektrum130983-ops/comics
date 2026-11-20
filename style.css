@@ -1300,3 +1300,35 @@ dialog[open] {
   color: #fff;
   text-align: center;
 }
+.issue-one-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 212, 59, 0.45);
+  background: rgba(255, 212, 59, 0.08);
+  color: #ffd43b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.issue-one-filter-btn:hover {
+  background: rgba(255, 212, 59, 0.18);
+  border-color: rgba(255, 212, 59, 0.8);
+}
+
+.issue-one-filter-btn.is-active {
+  background: linear-gradient(135deg, #ffd43b, #f59f00);
+  color: #11131a;
+  border-color: #ffe066;
+  box-shadow: 0 0 18px rgba(255, 212, 59, 0.55);
+}
+
+.issue-one-filter-btn small {
+  font-size: 11px;
+  opacity: 0.85;
+}
