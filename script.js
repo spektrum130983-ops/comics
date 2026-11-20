@@ -72,10 +72,10 @@ function rowsToComics(csv) {
     throw Error("La feuille Google Sheets ne contient aucune ligne exploitable.");
   }
   const headers = rows[0].map(x => clean(x).replace(/^\uFEFF/, ""));
-  const wanted = [
+const wanted = [
     "Date", "Titre", "num", "vf", "vo", "Editeur",
     "Equipe", "Periode", "Auteur", "Dessinateur",
-    "Résumé", "Covers", "Planche", "lu 2 fois"
+    "Résumé", "Covers", "Planche", "lu 2 fois", "#1"
   ];
   const indexes = wanted.map(h => headers.indexOf(h));
   if (indexes[1] === -1 || indexes[5] === -1) {
