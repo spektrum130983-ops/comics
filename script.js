@@ -1,11 +1,22 @@
 // Connexion directe à Google Sheets (Lecture comics 2026 — Feuille 1, gid=0)
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1-Gwoxyi5A3h2DmtCrX_ySN8sBu0irqWMykvjpHB7b1w/gviz/tq?tqx=out:csv&gid=0";
 
-let comics = [], currentPublisher = "Tous", currentTeam = "Toutes", currentPeriod = "Toutes", currentPage = 1;
+let comics = [];
+let currentPublisher = "Tous";
+let currentTeam = "Toutes";
+let currentPeriod = "Toutes";
+let currentPage = 1;
+
 const PAGE_SIZE = 48;
 const $ = id => document.getElementById(id);
 const clean = v => v == null ? "" : String(v).trim();
-const esc = s => clean(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const esc = s => clean(s).replace(/[&<>"']/g, c => ({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+}[c]));
 
 function parseCSV(text) {
   const rows = [];
@@ -13,31 +24,57 @@ function parseCSV(text) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i], next = text[i + 1];
     if (quoted) {
-      if (ch === '"' && next === '"') { field += '"'; i++; }
-      else if (ch === '"') quoted = false;
-      else field += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ",") { row.push(field); field = ""; }
-    else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else if (ch !== "\r") field += ch;
+      if (ch === '"' && next === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else if (ch !== "\r") {
+      field += ch;
+    }
   }
-  if (field.length || row.length) { row.push(field); rows.push(row); }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
   return rows;
 }
 
 function rowsToComics(csv) {
   const rows = parseCSV(csv);
-  if (rows.length < 2) throw Error("La feuille Google Sheets ne contient aucune ligne exploitable.");
+  if (rows.length < 2) {
+    throw Error("La feuille Google Sheets ne contient aucune ligne exploitable.");
+  }
   const headers = rows[0].map(x => clean(x).replace(/^\uFEFF/, ""));
-  const wanted = ["Date", "Titre", "num", "vf", "vo", "Editeur", "Equipe", "Periode", "Auteur", "Dessinateur", "Résumé", "Covers", "Planche", "lu 2 fois"];
+  const wanted = [
+    "Date", "Titre", "num", "vf", "vo", "Editeur",
+    "Equipe", "Periode", "Auteur", "Dessinateur",
+    "Résumé", "Covers", "Planche", "lu 2 fois"
+  ];
   const indexes = wanted.map(h => headers.indexOf(h));
   if (indexes[1] === -1 || indexes[5] === -1) {
     throw Error("Colonnes « Titre » et « Editeur » introuvables dans la première ligne de l'onglet.");
   }
+
   return rows.slice(1)
-    .map(r => {
-      const c = {};
-      wanted.forEach((h, i) => { c[h] = indexes[i] >= 0 ? clean(r[indexes[i]]) : ""; });
+    .map((r, rowIdx) => {
+      const c = { _rowIndex: rowIdx };
+      wanted.forEach((h, i) => {
+        c[h] = indexes[i] >= 0 ? clean(r[indexes[i]]) : "";
+      });
       return c;
     })
     .filter(c => c.Titre || c.Editeur);
@@ -80,7 +117,8 @@ function issueNum(s) {
 }
 
 function publisherList() {
-  return [...new Set(comics.map(c => clean(c.Editeur)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  return [...new Set(comics.map(c => clean(c.Editeur)).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "fr"));
 }
 
 function teamList(baseList = comics) {
@@ -106,30 +144,51 @@ function periodList(baseList = comics) {
 }
 
 function getFiltered() {
-  const q = $("search").value.toLocaleLowerCase("fr").trim();
+  const q = $("search") ? $("search").value.toLocaleLowerCase("fr").trim() : "";
   let list = comics.filter(c => {
     const pubOk = currentPublisher === "Tous" || clean(c.Editeur) === currentPublisher;
     const teamOk = currentTeam === "Toutes" || clean(c.Equipe) === currentTeam;
     const periodOk = currentPeriod === "Toutes" || clean(c.Periode) === currentPeriod;
     return pubOk && teamOk && periodOk;
   });
-  if (q) list = list.filter(c => ["Titre", "num", "vo", "vf", "Editeur", "Equipe", "Periode", "Auteur", "Dessinateur"].some(k => clean(c[k]).toLocaleLowerCase("fr").includes(q)));
-const sort = $("sort").value;
+
+  if (q) {
+    list = list.filter(c =>
+      ["Titre", "num", "vo", "vf", "Editeur", "Equipe", "Periode", "Auteur", "Dessinateur"]
+        .some(k => clean(c[k]).toLocaleLowerCase("fr").includes(q))
+    );
+  }
+
+  const sort = $("sort") ? $("sort").value : "date-desc";
+  const isAsc = sort === "date-asc";
+
   list.sort((a, b) => {
-    if (sort === "title") return clean(a.Titre).localeCompare(clean(b.Titre), "fr");
-    if (sort === "number") return issueNum(a.num) - issueNum(b.num);
+    if (sort === "title") {
+      return clean(a.Titre).localeCompare(clean(b.Titre), "fr");
+    }
+    if (sort === "number") {
+      return issueNum(a.num) - issueNum(b.num);
+    }
 
     const da = parseDate(a.Date);
     const db = parseDate(b.Date);
     const aValid = Number.isFinite(da);
     const bValid = Number.isFinite(db);
 
-    if (!aValid && !bValid) return 0;
-    if (!aValid) return 1;
-    if (!bValid) return -1;
+    if (aValid && bValid && da !== db) {
+      return isAsc ? da - db : db - da;
+    }
+    if (aValid && !bValid) {
+      return isAsc ? -1 : 1;
+    }
+    if (!aValid && bValid) {
+      return isAsc ? 1 : -1;
+    }
 
-    return sort === "date-asc" ? da - db : db - da;
+    // Repli déterministe sur l'ordre d'apparition dans la feuille Google Sheets
+    return isAsc ? a._rowIndex - b._rowIndex : b._rowIndex - a._rowIndex;
   });
+
   return list;
 }
 
@@ -147,18 +206,27 @@ function renderStats() {
 
 function renderTabs() {
   const counts = {};
-  comics.forEach(c => { const p = clean(c.Editeur); if (p) counts[p] = (counts[p] || 0) + 1; });
-  $("tabs").innerHTML = ["Tous", ...publisherList()].map(p => `<button class="tab ${p === currentPublisher ? "active" : ""}" data-publisher="${esc(p)}">${esc(p)}<small>${p === "Tous" ? comics.length : counts[p]}</small></button>`).join("");
-  $("tabs").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    currentPublisher = b.dataset.publisher;
-    currentTeam = "Toutes";
-    currentPeriod = "Toutes";
-    currentPage = 1;
-    renderTabs();
-    renderTeamTabs();
-    renderPeriodTabs();
-    renderGrid();
-  }));
+  comics.forEach(c => {
+    const p = clean(c.Editeur);
+    if (p) counts[p] = (counts[p] || 0) + 1;
+  });
+
+  $("tabs").innerHTML = ["Tous", ...publisherList()]
+    .map(p => `<button class="tab ${p === currentPublisher ? "active" : ""}" data-publisher="${esc(p)}">${esc(p)}<small>${p === "Tous" ? comics.length : counts[p]}</small></button>`)
+    .join("");
+
+  $("tabs").querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => {
+      currentPublisher = b.dataset.publisher;
+      currentTeam = "Toutes";
+      currentPeriod = "Toutes";
+      currentPage = 1;
+      renderTabs();
+      renderTeamTabs();
+      renderPeriodTabs();
+      renderGrid();
+    });
+  });
 }
 
 function renderTeamTabs() {
@@ -171,17 +239,23 @@ function renderTeamTabs() {
   if (currentTeam !== "Toutes" && !teams.some(t => t.name === currentTeam)) {
     currentTeam = "Toutes";
   }
+
   const allBtn = `<button class="tab ${currentTeam === "Toutes" ? "active" : ""}" data-team="Toutes">Toutes<small>${scoped.length}</small></button>`;
-  const btns = teams.map(t => `<button class="tab ${t.name === currentTeam ? "active" : ""}" data-team="${esc(t.name)}">${esc(t.name)}<small>${t.count}</small></button>`).join("");
+  const btns = teams
+    .map(t => `<button class="tab ${t.name === currentTeam ? "active" : ""}" data-team="${esc(t.name)}">${esc(t.name)}<small>${t.count}</small></button>`)
+    .join("");
+
   teamEl.innerHTML = allBtn + btns;
-  teamEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    currentTeam = b.dataset.team;
-    currentPeriod = "Toutes";
-    currentPage = 1;
-    renderTeamTabs();
-    renderPeriodTabs();
-    renderGrid();
-  }));
+  teamEl.querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => {
+      currentTeam = b.dataset.team;
+      currentPeriod = "Toutes";
+      currentPage = 1;
+      renderTeamTabs();
+      renderPeriodTabs();
+      renderGrid();
+    });
+  });
 }
 
 function renderPeriodTabs() {
@@ -196,15 +270,21 @@ function renderPeriodTabs() {
   if (currentPeriod !== "Toutes" && !periods.some(p => p.name === currentPeriod)) {
     currentPeriod = "Toutes";
   }
+
   const allBtn = `<button class="tab ${currentPeriod === "Toutes" ? "active" : ""}" data-period="Toutes">Toutes<small>${scoped.length}</small></button>`;
-  const btns = periods.map(p => `<button class="tab ${p.name === currentPeriod ? "active" : ""}" data-period="${esc(p.name)}">${esc(p.name)}<small>${p.count}</small></button>`).join("");
+  const btns = periods
+    .map(p => `<button class="tab ${p.name === currentPeriod ? "active" : ""}" data-period="${esc(p.name)}">${esc(p.name)}<small>${p.count}</small></button>`)
+    .join("");
+
   periodEl.innerHTML = allBtn + btns;
-  periodEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    currentPeriod = b.dataset.period;
-    currentPage = 1;
-    renderPeriodTabs();
-    renderGrid();
-  }));
+  periodEl.querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => {
+      currentPeriod = b.dataset.period;
+      currentPage = 1;
+      renderPeriodTabs();
+      renderGrid();
+    });
+  });
 }
 
 function publisherColor(pub) {
@@ -256,24 +336,45 @@ function bindCoverFallbacks() {
 }
 
 function renderGrid() {
-  const list = getFiltered(), pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const list = getFiltered();
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   currentPage = Math.min(currentPage, pages);
-  const start = (currentPage - 1) * PAGE_SIZE, visible = list.slice(start, start + PAGE_SIZE);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const visible = list.slice(start, start + PAGE_SIZE);
+
   $("grid").innerHTML = visible.map((c, i) => card(c, start + i)).join("");
   bindCoverFallbacks();
+
   $("result-count").textContent = `${list.length.toLocaleString("fr-FR")} résultat${list.length > 1 ? "s" : ""}`;
   $("empty").hidden = list.length !== 0;
+
   $("pagination").innerHTML = pages <= 1 ? "" : `
     <button class="page-btn" id="prev" ${currentPage === 1 ? "disabled" : ""}>← Précédent</button>
     <span class="result-count">Page ${currentPage} sur ${pages}</span>
     <button class="page-btn" id="next" ${currentPage === pages ? "disabled" : ""}>Suivant →</button>
   `;
-  $("prev")?.addEventListener("click", () => { currentPage--; renderGrid(); window.scrollTo({ top: $("tabs").offsetTop - 90, behavior: "smooth" }); });
-  $("next")?.addEventListener("click", () => { currentPage++; renderGrid(); window.scrollTo({ top: $("tabs").offsetTop - 90, behavior: "smooth" }); });
+
+  $("prev")?.addEventListener("click", () => {
+    currentPage--;
+    renderGrid();
+    window.scrollTo({ top: $("tabs").offsetTop - 90, behavior: "smooth" });
+  });
+
+  $("next")?.addEventListener("click", () => {
+    currentPage++;
+    renderGrid();
+    window.scrollTo({ top: $("tabs").offsetTop - 90, behavior: "smooth" });
+  });
+
   $("grid").querySelectorAll(".comic-card").forEach(el => {
     const open = () => showDetail(list[Number(el.dataset.index)]);
     el.addEventListener("click", open);
-    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    el.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        open();
+      }
+    });
   });
 }
 
@@ -290,6 +391,7 @@ function showDetail(c) {
     ["Dessinateur", c.Dessinateur]
   ];
   const cover = getSheetCover(c);
+
   $("detail-content").innerHTML = `
     <div class="detail-layout">
       <div>${cover ? `<img class="detail-cover" src="${esc(cover)}" alt="Couverture">` : `<div class="detail-cover">${placeholder(c)}</div>`}</div>
@@ -309,6 +411,7 @@ function showDetail(c) {
       </div>
     </div>
   `;
+
   const detailImg = $("detail-content").querySelector(".detail-cover[src]");
   if (detailImg) {
     detailImg.addEventListener("error", () => {
@@ -318,37 +421,52 @@ function showDetail(c) {
       }));
     }, { once: true });
   }
+
   $("detail-dialog").showModal();
 }
 
-$("dialog-close").addEventListener("click", () => $("detail-dialog").close());
-$("detail-dialog").addEventListener("click", e => { if (e.target === $("detail-dialog")) $("detail-dialog").close(); });
-$("search").addEventListener("input", () => { currentPage = 1; renderGrid(); });
-$("sort").addEventListener("change", () => { currentPage = 1; renderGrid(); });
+$("dialog-close")?.addEventListener("click", () => $("detail-dialog").close());
+$("detail-dialog")?.addEventListener("click", e => {
+  if (e.target === $("detail-dialog")) $("detail-dialog").close();
+});
+$("search")?.addEventListener("input", () => {
+  currentPage = 1;
+  renderGrid();
+});
+$("sort")?.addEventListener("change", () => {
+  currentPage = 1;
+  renderGrid();
+});
 
 async function loadComics() {
   const status = $("connection-status");
   const dot = $("live-dot");
   try {
-    status.textContent = "Synchronisation Google Sheets…";
+    if (status) status.textContent = "Synchronisation Google Sheets…";
     const response = await fetch(SHEET_CSV_URL, { cache: "no-store" });
-    if (!response.ok) throw Error(`Google Sheets a répondu avec le statut ${response.status}.`);
+    if (!response.ok) {
+      throw Error(`Google Sheets a répondu avec le statut ${response.status}.`);
+    }
     const csv = await response.text();
     if (csv.trim().startsWith("<!DOCTYPE") || csv.trim().startsWith("<html")) {
       throw Error("Google Sheets a renvoyé une page HTML (connexion requise ou export bloqué).");
     }
     comics = rowsToComics(csv);
-    status.textContent = "Connecté à Google Sheets";
-    status.classList.add("connected");
-    dot.classList.add("connected");
+    if (status) {
+      status.textContent = "Connecté à Google Sheets";
+      status.classList.add("connected");
+    }
+    if (dot) dot.classList.add("connected");
     renderStats();
     renderTabs();
     renderTeamTabs();
     renderPeriodTabs();
     renderGrid();
   } catch (err) {
-    status.textContent = "Erreur Google Sheets";
-    status.title = err.message;
+    if (status) {
+      status.textContent = "Erreur Google Sheets";
+      status.title = err.message;
+    }
     $("grid").innerHTML = `<div class="empty" style="grid-column: 1 / -1;">
       <strong>Connexion à Google Sheets impossible</strong><br><br>
       ${esc(err.message)}
