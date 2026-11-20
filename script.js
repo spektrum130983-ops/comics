@@ -90,6 +90,13 @@ function findExactColIndex(headers, candidates) {
   return -1;
 }
 
+function resolveIssueOneColIndex(headers) {
+  const exactIdx = findExactColIndex(headers, ["#1", "1"]);
+  if (exactIdx !== -1) return exactIdx;
+  // Colonne O dans Google Sheets = index 14 (A=0 .. N=13, O=14)
+  return headers.length > 14 ? 14 : -1;
+}
+
 function rowsToComics(csv) {
   const rows = parseCSV(csv);
   if (rows.length < 2) {
@@ -112,7 +119,7 @@ function rowsToComics(csv) {
     Covers: findColIndex(headers, ["Covers", "Cover", "Jaquette"]),
     Planche: findColIndex(headers, ["Planche", "Planches"]),
     "lu 2 fois": findColIndex(headers, ["lu 2 fois", "lu2fois"]),
-    "#1": findExactColIndex(headers, ["#1", "1"])
+    "#1": resolveIssueOneColIndex(headers)
   };
 
   if (colMap.Titre === -1 || colMap.Editeur === -1) {
@@ -369,7 +376,8 @@ function isReread(c) {
 }
 
 function hasIssueOne(c) {
-  return clean(c["#1"]) === "1";
+  const v = clean(c["#1"]);
+  return v === "1" || v === "#1";
 }
 
 function card(c, index) {
@@ -378,9 +386,11 @@ function card(c, index) {
   const issueLabel = formatIssueNum(c.num);
   const titleWithNum = issueLabel ? `${issueLabel} ${title}` : title;
   const metaParts = [clean(c.Equipe), clean(c.Periode), clean(c.Editeur)].filter(Boolean);
-  const goldClass = hasIssueOne(c) ? " has-gold-halo" : "";
+  const isOne = hasIssueOne(c);
+  const goldClass = isOne ? " has-gold-halo" : "";
+  const cardGoldClass = isOne ? " is-issue-one" : "";
 
-  return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(titleWithNum)}">
+  return `<article class="comic-card${cardGoldClass}" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(titleWithNum)}">
     <div class="cover${goldClass}">
       ${placeholder(c)}
       ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(titleWithNum)}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;">` : ""}
