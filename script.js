@@ -66,27 +66,49 @@ function parseCSV(text) {
   return rows;
 }
 
+function findColIndex(headers, candidates) {
+  const normHeaders = headers.map(h => clean(h).toLowerCase().replace(/\s+/g, ""));
+  for (const cand of candidates) {
+    const idx = normHeaders.indexOf(cand.toLowerCase().replace(/\s+/g, ""));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
 function rowsToComics(csv) {
   const rows = parseCSV(csv);
   if (rows.length < 2) {
     throw Error("La feuille Google Sheets ne contient aucune ligne exploitable.");
   }
   const headers = rows[0].map(x => clean(x).replace(/^\uFEFF/, ""));
-  const wanted = [
-    "Date", "Titre", "num", "vf", "vo", "Editeur",
-    "Equipe", "Periode", "Auteur", "Dessinateur",
-    "Résumé", "Covers", "Planche", "lu 2 fois", "#1"
-  ];
-  const indexes = wanted.map(h => headers.indexOf(h));
-  if (indexes[1] === -1 || indexes[5] === -1) {
+
+  const colMap = {
+    Date: findColIndex(headers, ["Date"]),
+    Titre: findColIndex(headers, ["Titre"]),
+    num: findColIndex(headers, ["num", "numero", "numéro", "n°", "no"]),
+    vf: findColIndex(headers, ["vf"]),
+    vo: findColIndex(headers, ["vo"]),
+    Editeur: findColIndex(headers, ["Editeur", "Éditeur"]),
+    Equipe: findColIndex(headers, ["Equipe", "Équipe", "Equipes", "Équipes"]),
+    Periode: findColIndex(headers, ["Periode", "Période"]),
+    Auteur: findColIndex(headers, ["Auteur", "Scénariste"]),
+    Dessinateur: findColIndex(headers, ["Dessinateur"]),
+    "Résumé": findColIndex(headers, ["Résumé", "Resume"]),
+    Covers: findColIndex(headers, ["Covers", "Cover", "Jaquette"]),
+    Planche: findColIndex(headers, ["Planche", "Planches"]),
+    "lu 2 fois": findColIndex(headers, ["lu 2 fois", "lu2fois"]),
+    "#1": findColIndex(headers, ["#1", "1"])
+  };
+
+  if (colMap.Titre === -1 || colMap.Editeur === -1) {
     throw Error("Colonnes « Titre » et « Editeur » introuvables dans la première ligne de l'onglet.");
   }
 
   return rows.slice(1)
     .map((r, rowIdx) => {
       const c = { _rowIndex: rowIdx };
-      wanted.forEach((h, i) => {
-        c[h] = indexes[i] >= 0 ? clean(r[indexes[i]]) : "";
+      Object.entries(colMap).forEach(([key, idx]) => {
+        c[key] = idx >= 0 ? clean(r[idx]) : "";
       });
       return c;
     })
@@ -339,17 +361,20 @@ function hasIssueOne(c) {
 function card(c, index) {
   const title = clean(c.Titre) || "Sans titre";
   const cover = getSheetCover(c);
+  const issueLabel = formatIssueNum(c.num);
+  const titleWithNum = issueLabel ? `${issueLabel} ${title}` : title;
   const metaParts = [clean(c.Equipe), clean(c.Periode), clean(c.Editeur)].filter(Boolean);
   const goldClass = hasIssueOne(c) ? " has-gold-halo" : "";
-  return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(title)}">
+
+  return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(titleWithNum)}">
     <div class="cover${goldClass}">
       ${placeholder(c)}
-      ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(title)}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;">` : ""}
-      ${c.num ? `<span class="issue" style="z-index:2;">${esc(formatIssueNum(c.num))}</span>` : ""}
+      ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(titleWithNum)}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;">` : ""}
+      ${issueLabel ? `<span class="issue" style="z-index:2;">${esc(issueLabel)}</span>` : ""}
       ${isReread(c) ? `<span class="reread-badge" style="z-index:2;" title="Lu 2 fois">2×</span>` : ""}
     </div>
     <div class="comic-info">
-      <div class="comic-title" title="${esc(title)}">${esc(title)}</div>
+      <div class="comic-title" title="${esc(titleWithNum)}">${esc(titleWithNum)}</div>
       <div class="comic-meta">${esc(metaParts.slice(0, 2).join(" · ") || "Éditeur inconnu")}${c.Date ? " · " + esc(c.Date) : ""}</div>
     </div>
   </article>`;
@@ -551,11 +576,11 @@ function openLightbox(src, label) {
 function showDetail(c) {
   const issueLabel = formatIssueNum(c.num);
   const fields = [
+    ["Numéro", issueLabel],
     ["Date de lecture", c.Date],
     ["Éditeur", c.Editeur],
     ["Équipe", c.Equipe],
     ["Période", c.Periode],
-    ["Numéro", issueLabel],
     ["Titre VF", c.vf],
     ["Titre VO", c.vo],
     ["Scénariste", c.Auteur],
