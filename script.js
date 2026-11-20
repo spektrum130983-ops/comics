@@ -1,39 +1,31 @@
-// Connexion directe en lecture à Google Sheets (onglet gid=0).
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1-Gwoxyi5A3h2DmtCrX_ySN8sBu0irqWMykvjpHB7b1w/gviz/tq?tqx=out:csv&gid=0";
+// Connexion exclusive à Google Sheets (onglet gid=0) via JSONP (évite les blocages CORS).
+const SHEET_ID = "1-Gwoxyi5A3h2DmtCrX_ySN8sBu0irqWMykvjpHB7b1w";
+const SHEET_GID = "0";
 let comics = [], currentPublisher = "Tous", currentPage = 1;
 const PAGE_SIZE = 48;
 const $ = id => document.getElementById(id);
 const clean = v => v == null ? "" : String(v).trim();
 const esc = s => clean(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-function parseCSV(text) {
-  const rows = [];
-  let row = [], field = "", quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i], next = text[i + 1];
-    if (quoted) {
-      if (ch === '"' && next === '"') { field += '"'; i++; }
-      else if (ch === '"') quoted = false;
-      else field += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ",") { row.push(field); field = ""; }
-    else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else if (ch !== "\r") field += ch;
+function gvizTableToComics(table) {
+  if (!table || !Array.isArray(table.cols) || !Array.isArray(table.rows)) {
+    throw Error("Format de réponse Google Sheets inattendu.");
   }
-  if (field.length || row.length) { row.push(field); rows.push(row); }
-  return rows;
-}
-
-function rowsToComics(csv) {
-  const rows = parseCSV(csv);
-  if (rows.length < 2) throw Error("La feuille Google Sheets ne contient aucune ligne exploitable.");
-  const headers = rows[0].map(x => clean(x).replace(/^\uFEFF/, ""));
+  const headers = table.cols.map(col => clean(col.label || col.id));
   const wanted = ["Date", "Titre", "num", "vf", "vo", "Editeur", "Equipe", "Periode", "Auteur", "Dessinateur", "Résumé", "Covers", "Planche", "lu 2 fois"];
   const indexes = wanted.map(h => headers.indexOf(h));
-  if (indexes[1] === -1 || indexes[5] === -1) throw Error("Colonnes « Titre » et « Editeur » introuvables. Vérifie la première ligne de l'onglet.");
-  return rows.slice(1).map(r => {
+  if (indexes[1] === -1 || indexes[5] === -1) {
+    throw Error("Colonnes « Titre » et « Editeur » introuvables dans la première ligne de l'onglet.");
+  }
+  return table.rows.map(r => {
+    const cells = Array.isArray(r.c) ? r.c : [];
     const c = {};
-    wanted.forEach((h, i) => { c[h] = indexes[i] >= 0 ? clean(r[indexes[i]]) : ""; });
+    wanted.forEach((h, i) => {
+      const idx = indexes[i];
+      const cell = idx >= 0 ? cells[idx] : null;
+      const val = cell ? (cell.f != null && cell.f !== "" ? cell.f : cell.v) : "";
+      c[h] = clean(val);
+    });
     return c;
   }).filter(c => c.Titre || c.Editeur);
 }
@@ -181,26 +173,62 @@ $("detail-dialog").addEventListener("click", e => { if (e.target === $("detail-d
 $("search").addEventListener("input", () => { currentPage = 1; renderGrid(); });
 $("sort").addEventListener("change", () => { currentPage = 1; renderGrid(); });
 
+function fetchSheetJsonp() {
+  return new Promise((resolve, reject) => {
+    const callbackName = "__comicShelfGvizCb_" + Date.now();
+    const script = document.createElement("script");
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(Error("Délai dépassé lors de la connexion à Google Sheets."));
+    }, 10000);
+
+    function cleanup() {
+      clearTimeout(timeout);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (payload) => {
+      cleanup();
+      if (!payload || payload.status === "error") {
+        const msg = payload?.errors?.[0]?.detailed_message || payload?.errors?.[0]?.message || "Google Sheets a refusé la lecture.";
+        reject(Error(msg));
+        return;
+      }
+      resolve(payload.table);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(Error("Impossible de charger le flux Google Sheets (vérifie l'accès réseau ou le partage du document)."));
+    };
+
+    script.src = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?gid=${encodeURIComponent(SHEET_GID)}&tqx=responseHandler:${callbackName}`;
+    document.body.appendChild(script);
+  });
+}
+
 async function loadComics() {
   const status = $("connection-status");
   const dot = $("live-dot");
   try {
-    status.textContent = "Synchronisation…";
-    const response = await fetch(SHEET_CSV_URL, { cache: "no-store" });
-    if (!response.ok) throw Error("Google Sheets a refusé l'accès (" + response.status + ").");
-    const csv = await response.text();
-    if (csv.trim().startsWith("<!DOCTYPE") || csv.trim().startsWith("<html")) throw Error("Google Sheets renvoie une page HTML : la feuille n'est probablement pas accessible en lecture publique.");
-    comics = rowsToComics(csv);
-    status.textContent = "Synchronisé";
+    status.textContent = "Synchronisation Google Sheets…";
+    const table = await fetchSheetJsonp();
+    comics = gvizTableToComics(table);
+    status.textContent = "Connecté à Google Sheets";
     status.classList.add("connected");
     dot.classList.add("connected");
     renderStats();
     renderTabs();
     renderGrid();
   } catch (err) {
-    status.textContent = "Hors ligne";
+    status.textContent = "Erreur Google Sheets";
     status.title = err.message;
-    $("grid").innerHTML = `<div class="empty" style="grid-column: 1 / -1;">Impossible de lire ta feuille Google Sheets.<br><br>${esc(err.message)}<br><br>Dans Google Sheets, partage la feuille en mode « Tous les utilisateurs disposant du lien — Lecteur », puis recharge le site.</div>`;
+    $("grid").innerHTML = `<div class="empty" style="grid-column: 1 / -1;">
+      <strong>Connexion à Google Sheets impossible</strong><br><br>
+      ${esc(err.message)}
+    </div>`;
   }
 }
+
 loadComics();
