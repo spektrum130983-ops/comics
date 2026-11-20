@@ -106,6 +106,12 @@ function getSheetPlanche(c) {
   return getValidUrl(c.Planche);
 }
 
+function formatIssueNum(num) {
+  const n = clean(num);
+  if (!n) return "";
+  return n.startsWith("#") ? n : `#${n}`;
+}
+
 function parseDate(s) {
   const v = clean(s);
   if (!v) return NaN;
@@ -333,7 +339,7 @@ function card(c, index) {
     <div class="cover">
       ${placeholder(c)}
       ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(title)}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;">` : ""}
-      ${c.num ? `<span class="issue" style="z-index:2;">#${esc(c.num)}</span>` : ""}
+      ${c.num ? `<span class="issue" style="z-index:2;">${esc(formatIssueNum(c.num))}</span>` : ""}
       ${isReread(c) ? `<span class="reread-badge" style="z-index:2;" title="Lu 2 fois">2×</span>` : ""}
     </div>
     <div class="comic-info">
@@ -537,12 +543,13 @@ function openLightbox(src, label) {
 }
 
 function showDetail(c) {
+  const issueLabel = formatIssueNum(c.num);
   const fields = [
     ["Date de lecture", c.Date],
     ["Éditeur", c.Editeur],
     ["Équipe", c.Equipe],
     ["Période", c.Periode],
-    ["Numéro", c.num ? "#" + c.num : ""],
+    ["Numéro", issueLabel],
     ["Titre VF", c.vf],
     ["Titre VO", c.vo],
     ["Scénariste", c.Auteur],
@@ -551,20 +558,29 @@ function showDetail(c) {
   const cover = getSheetCover(c);
   const planche = getSheetPlanche(c);
   const baseTitle = clean(c.Titre) || "Sans titre";
+  const fullSeriesTitle = issueLabel ? `${issueLabel} ${baseTitle}` : baseTitle;
+
+  const coverCaption = issueLabel
+    ? `<div class="cover-num-caption">${esc(issueLabel)} — ${esc(baseTitle)}</div>`
+    : "";
 
   const coverCol = cover
     ? `<div class="detail-col-cover">
          <div class="zoomable-card" id="open-cover-zoom" title="Cliquer pour agrandir la jaquette">
-           <img src="${esc(cover)}" alt="Jaquette de ${esc(baseTitle)}">
+           <img src="${esc(cover)}" alt="Jaquette de ${esc(fullSeriesTitle)}">
            <div class="zoom-label"><span>Jaquette</span><span>🔍 Agrandir</span></div>
          </div>
+         ${coverCaption}
        </div>`
-    : `<div class="detail-col-cover"><div class="detail-cover">${placeholder(c)}</div></div>`;
+    : `<div class="detail-col-cover">
+         <div class="detail-cover">${placeholder(c)}</div>
+         ${coverCaption}
+       </div>`;
 
   const plancheCol = planche
     ? `<div class="detail-col-planche">
          <div class="zoomable-card" id="open-planche-zoom" title="Cliquer pour agrandir la planche">
-           <img src="${esc(planche)}" alt="Planche de ${esc(baseTitle)}">
+           <img src="${esc(planche)}" alt="Planche de ${esc(fullSeriesTitle)}">
            <div class="zoom-label"><span>Planche</span><span>🔍 Agrandir</span></div>
          </div>
        </div>`
@@ -578,10 +594,12 @@ function showDetail(c) {
           ${c.Editeur ? `<span class="detail-badge">${esc(c.Editeur)}</span>` : ""}
           ${c.Equipe ? `<span class="detail-badge">${esc(c.Equipe)}</span>` : ""}
           ${c.Periode ? `<span class="detail-badge">${esc(c.Periode)}</span>` : ""}
-          ${c.num ? `<span class="detail-badge">N° ${esc(c.num)}</span>` : ""}
+          ${issueLabel ? `<span class="detail-badge">${esc(issueLabel)}</span>` : ""}
           ${isReread(c) ? `<span class="detail-badge reread">Lu 2 fois</span>` : ""}
         </div>
-        <h3 class="detail-title">${esc(baseTitle)}</h3>
+        <h3 class="detail-title">
+          ${issueLabel ? `<span class="detail-issue-prefix">${esc(issueLabel)}</span>` : ""}${esc(baseTitle)}
+        </h3>
         <div class="detail-list">
           ${fields.filter(x => clean(x[1])).map(x => `<div class="detail-field"><span>${esc(x[0])}</span><strong>${esc(x[1])}</strong></div>`).join("")}
         </div>
@@ -593,7 +611,7 @@ function showDetail(c) {
 
   const coverZoomEl = $("open-cover-zoom");
   if (coverZoomEl && cover) {
-    coverZoomEl.addEventListener("click", () => openLightbox(cover, `Jaquette — ${baseTitle}`));
+    coverZoomEl.addEventListener("click", () => openLightbox(cover, `Jaquette — ${fullSeriesTitle}`));
     coverZoomEl.querySelector("img")?.addEventListener("error", () => {
       coverZoomEl.replaceWith(Object.assign(document.createElement("div"), {
         className: "detail-cover",
@@ -604,7 +622,7 @@ function showDetail(c) {
 
   const plancheZoomEl = $("open-planche-zoom");
   if (plancheZoomEl && planche) {
-    plancheZoomEl.addEventListener("click", () => openLightbox(planche, `Planche — ${baseTitle}`));
+    plancheZoomEl.addEventListener("click", () => openLightbox(planche, `Planche — ${fullSeriesTitle}`));
     plancheZoomEl.querySelector("img")?.addEventListener("error", () => {
       plancheZoomEl.closest(".detail-col-planche")?.remove();
     }, { once: true });
