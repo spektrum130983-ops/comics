@@ -8,7 +8,7 @@ const clean = v => v == null ? "" : String(v).trim();
 const esc = s => clean(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // Cache local des couvertures trouvées sur le web
-const COVER_CACHE_KEY = "comicshelf_web_covers_v2";
+const COVER_CACHE_KEY = "comicshelf_web_covers_v3";
 let coverCache = {};
 try {
   coverCache = JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || "{}");
@@ -84,29 +84,43 @@ async function resolveWebCover(c) {
 }
 
 function hydrateMissingCovers(visibleComics) {
-  visibleComics.forEach((c, idx) => {
-    if (clean(c.Covers)) return;
-    const slot = document.querySelector(`[data-cover-slot="${idx}"]`);
-    if (!slot) return;
+  let active = 0;
+  const maxConcurrent = 6;
+  const queue = visibleComics
+    .map((c, idx) => ({ c, idx }))
+    .filter(({ c }) => !clean(c.Covers) && !(comicCacheKey(c) in coverCache));
 
-    resolveWebCover(c).then(url => {
-      if (!url || !slot.isConnected) return;
-      c._resolvedCover = url;
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = `Couverture de ${clean(c.Titre) || "Comic"}`;
-      img.onload = () => {
-        if (img.naturalWidth > 20 && slot.isConnected) {
-          slot.querySelector(".cover-placeholder")?.remove();
-          slot.prepend(img);
-        }
-      };
-      img.onerror = () => {
-        coverCache[comicCacheKey(c)] = "";
-        saveCoverCache();
-      };
-    });
-  });
+  function next() {
+    while (active < maxConcurrent && queue.length) {
+      const { c, idx } = queue.shift();
+      const slot = document.querySelector(`[data-cover-slot="${idx}"]`);
+      if (!slot) continue;
+      active++;
+      resolveWebCover(c)
+        .then(url => {
+          if (!url || !slot.isConnected) return;
+          c._resolvedCover = url;
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = `Couverture de ${clean(c.Titre) || "Comic"}`;
+          img.onload = () => {
+            if (img.naturalWidth > 20 && slot.isConnected) {
+              slot.querySelector(".cover-placeholder")?.remove();
+              slot.prepend(img);
+            }
+          };
+          img.onerror = () => {
+            coverCache[comicCacheKey(c)] = "";
+            saveCoverCache();
+          };
+        })
+        .finally(() => {
+          active--;
+          next();
+        });
+    }
+  }
+  next();
 }
 
 function parseCSV(text) {
@@ -219,7 +233,8 @@ function card(c, index, slotIndex) {
   const cover = clean(c.Covers) || c._resolvedCover || coverCache[comicCacheKey(c)] || "";
   return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(title)}">
     <div class="cover" data-cover-slot="${slotIndex}">
-      ${cover ? `<img src="${esc(cover)}" alt="Couverture de ${esc(title)}" onerror="this.remove();this.parentElement.insertAdjacentHTML('beforeend', '${placeholder(c).replace(/'/g, "&#39;")}')">` : placeholder(c)}
+      ${placeholder(c)}
+      ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(title)}">` : ""}
       ${c.num ? `<span class="issue">#${esc(c.num)}</span>` : ""}
       ${isReread(c) ? `<span class="reread-badge" title="Lu 2 fois">2×</span>` : ""}
     </div>
@@ -230,11 +245,22 @@ function card(c, index, slotIndex) {
   </article>`;
 }
 
+function bindCoverFallbacks() {
+  $("grid").querySelectorAll(".comic-cover-img").forEach(img => {
+    img.style.position = "relative";
+    img.style.zIndex = "1";
+    img.addEventListener("error", () => {
+      img.remove();
+    }, { once: true });
+  });
+}
+
 function renderGrid() {
   const list = getFiltered(), pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   currentPage = Math.min(currentPage, pages);
   const start = (currentPage - 1) * PAGE_SIZE, visible = list.slice(start, start + PAGE_SIZE);
   $("grid").innerHTML = visible.map((c, i) => card(c, start + i, i)).join("");
+  bindCoverFallbacks();
   $("result-count").textContent = `${list.length.toLocaleString("fr-FR")} résultat${list.length > 1 ? "s" : ""}`;
   $("empty").hidden = list.length !== 0;
   $("pagination").innerHTML = pages <= 1 ? "" : `
@@ -268,7 +294,7 @@ async function showDetail(c) {
   const cover = clean(c.Covers) || c._resolvedCover || coverCache[comicCacheKey(c)] || "";
   $("detail-content").innerHTML = `
     <div class="detail-layout">
-      <div id="detail-cover-wrap">${cover ? `<img class="detail-cover" src="${esc(cover)}" alt="Couverture" onerror="this.style.display='none'">` : `<div class="detail-cover">${placeholder(c)}</div>`}</div>
+      <div id="detail-cover-wrap">${cover ? `<img class="detail-cover" src="${esc(cover)}" alt="Couverture">` : `<div class="detail-cover">${placeholder(c)}</div>`}</div>
       <div>
         <div class="detail-badges">
           ${c.Editeur ? `<span class="detail-badge">${esc(c.Editeur)}</span>` : ""}
@@ -283,6 +309,15 @@ async function showDetail(c) {
       </div>
     </div>
   `;
+  const detailImg = $("detail-content").querySelector(".detail-cover[src]");
+  if (detailImg) {
+    detailImg.addEventListener("error", () => {
+      detailImg.replaceWith(Object.assign(document.createElement("div"), {
+        className: "detail-cover",
+        innerHTML: placeholder(c)
+      }));
+    }, { once: true });
+  }
   $("detail-dialog").showModal();
 
   if (!cover) {
