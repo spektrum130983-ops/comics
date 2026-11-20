@@ -1236,3 +1236,24 @@ dialog[open] {
   border-color: rgba(255, 212, 82, 0.55);
   box-shadow: 0 10px 28px rgba(245, 158, 11, 0.16);
 }
+.cover.has-gold-halo,
+.zoomable-card.has-gold-halo,
+.detail-cover.has-gold-halo {
+  overflow: visible !important;
+  border: 2px solid #ffd43b !important;
+  box-shadow:
+    0 0 12px rgba(255, 212, 59, 0.9),
+    0 0 26px rgba(250, 176, 5, 0.7),
+    0 0 44px rgba(245, 158, 11, 0.45) !important;
+}
+
+.cover.has-gold-halo > img,
+.zoomable-card.has-gold-halo > img,
+.detail-cover.has-gold-halo > img {
+  border-radius: inherit;
+}
+
+.comic-card:has(.cover.has-gold-halo) {
+  border-color: rgba(255, 212, 59, 0.65);
+  box-shadow: 0 10px 30px rgba(245, 158, 11, 0.22);
+}
