@@ -1,18 +1,53 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101116">
+  <meta name="description" content="Bibliothèque personnelle de comics lus.">
   <title>Ma bibliothèque de comics</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>📚 Mes comics lus</h1>
-    <input id="search" type="search" placeholder="Rechercher un titre…">
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-mark">▦</span><span>COMIC<span class="brand-light">SHELF</span></span></a>
+    <div class="top-actions"><span class="live-dot"></span><span>Ma collection</span></div>
   </header>
-  <nav id="tabs"></nav>
-  <main id="grid"></main>
+
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">BIBLIOTHÈQUE PERSONNELLE</div>
+      <h1>Mes comics<span class="accent">.</span></h1>
+      <p class="hero-copy">Tous tes univers, une seule bibliothèque.</p>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section class="library">
+      <div class="section-head">
+        <div><div class="eyebrow">EXPLORER LA COLLECTION</div><h2>Par éditeur</h2></div>
+        <div class="result-count" id="result-count"></div>
+      </div>
+      <nav class="tabs" id="tabs" aria-label="Filtrer par éditeur"></nav>
+      <div class="toolbar">
+        <label class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="Rechercher un titre, une équipe, un auteur…"></label>
+        <select id="sort" aria-label="Trier les comics">
+          <option value="date-desc">Plus récents d'abord</option>
+          <option value="date-asc">Plus anciens d'abord</option>
+          <option value="title">Titre A → Z</option>
+          <option value="number">Numéro croissant</option>
+        </select>
+      </div>
+      <div id="grid" class="grid" aria-live="polite"></div>
+      <div id="empty" class="empty" hidden>Aucun comic ne correspond à ta recherche.</div>
+      <div class="pagination" id="pagination"></div>
+    </section>
+  </main>
+
+  <footer>Ta collection, tes lectures, tes univers. <span>COMICSHELF</span></footer>
+  <dialog id="detail-dialog">
+    <button class="dialog-close" id="dialog-close" aria-label="Fermer">×</button>
+    <div id="detail-content"></div>
+  </dialog>
   <script src="script.js"></script>
 </body>
 </html>
