@@ -53,11 +53,25 @@ function getSheetCover(c) {
 
 function parseDate(s) {
   const v = clean(s);
-  if (!v) return 0;
-  let m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (!v) return NaN;
+
+  // JJ/MM/AAAA ou JJ-MM-AAAA (avec espaces éventuels)
+  let m = v.match(/^(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{4})/);
   if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
-  m = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : 0;
+
+  // JJ/MM/AA
+  m = v.match(/^(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2})$/);
+  if (m) {
+    const year = +m[3] >= 70 ? 1900 + +m[3] : 2000 + +m[3];
+    return new Date(year, +m[2] - 1, +m[1]).getTime();
+  }
+
+  // AAAA-MM-JJ ou AAAA/MM/JJ
+  m = v.match(/^(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+
+  const parsed = Date.parse(v);
+  return Number.isFinite(parsed) ? parsed : NaN;
 }
 
 function issueNum(s) {
