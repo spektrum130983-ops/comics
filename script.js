@@ -1,11 +1,113 @@
-// Connexion exclusive à Google Sheets (Lecture comics 2026 — Feuille 1, gid=0).
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1-Gwoxyi5A3h2DmtCrX_ySN8sBu0irqWMykvjpHB7b1w/export?format=csv&gid=0";
+// Connexion directe à Google Sheets (Lecture comics 2026 — Feuille 1, gid=0)
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1-Gwoxyi5A3h2DmtCrX_ySN8sBu0irqWMykvjpHB7b1w/gviz/tq?tqx=out:csv&gid=0";
 
 let comics = [], currentPublisher = "Tous", currentPage = 1;
 const PAGE_SIZE = 48;
 const $ = id => document.getElementById(id);
 const clean = v => v == null ? "" : String(v).trim();
 const esc = s => clean(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Cache local des couvertures trouvées sur le web
+const COVER_CACHE_KEY = "comicshelf_web_covers_v1";
+let coverCache = {};
+try {
+  coverCache = JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || "{}");
+} catch (_) {
+  coverCache = {};
+}
+const inFlightCovers = new Map();
+
+function saveCoverCache() {
+  try {
+    localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(coverCache));
+  } catch (_) {}
+}
+
+function comicCacheKey(c) {
+  return `${clean(c.Editeur)}|${clean(c.Titre)}|${clean(c.num)}|${clean(c.vo)}`.toLowerCase();
+}
+
+async function fetchFromOpenLibrary(c) {
+  const title = clean(c.Titre);
+  const num = clean(c.num).replace(/^#/, "");
+  const queryParts = [title, num ? `#${num}` : "", clean(c.Editeur)].filter(Boolean);
+  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(queryParts.join(" "))}&limit=6&fields=title,cover_i,publisher`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const docs = Array.isArray(data.docs) ? data.docs : [];
+  const match = docs.find(d => d.cover_i);
+  return match ? `https://covers.openlibrary.org/b/id/${match.cover_i}-L.jpg?default=false` : null;
+}
+
+async function fetchFromWikipedia(c) {
+  const queries = [
+    `${clean(c.Titre)} ${clean(c.num) ? "#" + clean(c.num) : ""} comic`.trim(),
+    `${clean(c.vo)} comic`.trim(),
+    `${clean(c.Titre)} (${clean(c.Editeur)} Comics)`.trim()
+  ].filter(q => q.length > 6);
+
+  for (const q of queries) {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(q)}&gsrlimit=3&prop=pageimages&piprop=thumbnail&pithumbsize=500&format=json&origin=*`;
+    const res = await fetch(url);
+    if (!res.ok) continue;
+    const data = await res.json();
+    const pages = Object.values(data?.query?.pages || {});
+    const withImg = pages.find(p => p.thumbnail?.source);
+    if (withImg) return withImg.thumbnail.source;
+  }
+  return null;
+}
+
+async function resolveWebCover(c) {
+  const key = comicCacheKey(c);
+  if (key in coverCache) return coverCache[key] || null;
+  if (inFlightCovers.has(key)) return inFlightCovers.get(key);
+
+  const task = (async () => {
+    let found = null;
+    try {
+      found = await fetchFromOpenLibrary(c);
+      if (!found) found = await fetchFromWikipedia(c);
+    } catch (_) {
+      found = null;
+    }
+    coverCache[key] = found || "";
+    saveCoverCache();
+    inFlightCovers.delete(key);
+    return found;
+  })();
+
+  inFlightCovers.set(key, task);
+  return task;
+}
+
+function hydrateMissingCovers(visibleComics) {
+  visibleComics.forEach((c, idx) => {
+    if (clean(c.Covers)) return;
+    const slot = document.querySelector(`[data-cover-slot="${idx}"]`);
+    if (!slot) return;
+
+    resolveWebCover(c).then(url => {
+      if (!url) return;
+      c._resolvedCover = url;
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = `Couverture de ${clean(c.Titre) || "Comic"}`;
+      img.loading = "lazy";
+      img.onload = () => {
+        if (img.naturalWidth > 20) {
+          slot.querySelector(".cover-placeholder")?.remove();
+          slot.prepend(img);
+        }
+      };
+      img.onerror = () => {
+        coverCache[comicCacheKey(c)] = "";
+        saveCoverCache();
+      };
+    });
+  });
+}
 
 function parseCSV(text) {
   const rows = [];
@@ -106,7 +208,7 @@ function renderStats() {
     <div class="stat"><strong>${comics.length.toLocaleString("fr-FR")}</strong><span>Comics lus</span></div>
     <div class="stat"><strong>${pub.length}</strong><span>Éditeurs</span></div>
     <div class="stat"><strong>${new Set(comics.map(c => clean(c.Titre)).filter(Boolean)).size.toLocaleString("fr-FR")}</strong><span>Séries / Titres</span></div>
-    <div class="stat"><strong>${comics.filter(c => clean(c.Covers)).length.toLocaleString("fr-FR")}</strong><span>Couvertures HD</span></div>
+    <div class="stat"><strong>${comics.filter(c => clean(c.Covers)).length.toLocaleString("fr-FR")}</strong><span>Jaquettes Sheets</span></div>
   `;
 }
 
@@ -145,10 +247,11 @@ function isReread(c) {
   return v && v !== "non" && v !== "0" && v !== "false";
 }
 
-function card(c, index) {
-  const title = clean(c.Titre) || "Sans titre", cover = clean(c.Covers);
+function card(c, index, slotIndex) {
+  const title = clean(c.Titre) || "Sans titre";
+  const cover = clean(c.Covers) || c._resolvedCover || coverCache[comicCacheKey(c)] || "";
   return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(title)}">
-    <div class="cover">
+    <div class="cover" data-cover-slot="${slotIndex}">
       ${cover ? `<img src="${esc(cover)}" alt="Couverture de ${esc(title)}" loading="lazy" onerror="this.remove();this.parentElement.insertAdjacentHTML('beforeend', '${placeholder(c).replace(/'/g, "&#39;")}')">` : placeholder(c)}
       ${c.num ? `<span class="issue">#${esc(c.num)}</span>` : ""}
       ${isReread(c) ? `<span class="reread-badge" title="Lu 2 fois">2×</span>` : ""}
@@ -164,7 +267,7 @@ function renderGrid() {
   const list = getFiltered(), pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   currentPage = Math.min(currentPage, pages);
   const start = (currentPage - 1) * PAGE_SIZE, visible = list.slice(start, start + PAGE_SIZE);
-  $("grid").innerHTML = visible.map((c, i) => card(c, start + i)).join("");
+  $("grid").innerHTML = visible.map((c, i) => card(c, start + i, i)).join("");
   $("result-count").textContent = `${list.length.toLocaleString("fr-FR")} résultat${list.length > 1 ? "s" : ""}`;
   $("empty").hidden = list.length !== 0;
   $("pagination").innerHTML = pages <= 1 ? "" : `
@@ -179,9 +282,12 @@ function renderGrid() {
     el.addEventListener("click", open);
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
   });
+
+  // Recherche automatique des jaquettes manquantes pour la page affichée
+  hydrateMissingCovers(visible);
 }
 
-function showDetail(c) {
+async function showDetail(c) {
   const fields = [
     ["Date de lecture", c.Date],
     ["Éditeur", c.Editeur],
@@ -193,10 +299,10 @@ function showDetail(c) {
     ["Scénariste", c.Auteur],
     ["Dessinateur", c.Dessinateur]
   ];
-  const cover = clean(c.Covers);
+  const cover = clean(c.Covers) || c._resolvedCover || coverCache[comicCacheKey(c)] || "";
   $("detail-content").innerHTML = `
     <div class="detail-layout">
-      <div>${cover ? `<img class="detail-cover" src="${esc(cover)}" alt="Couverture" onerror="this.style.display='none'">` : `<div class="detail-cover">${placeholder(c)}</div>`}</div>
+      <div id="detail-cover-wrap">${cover ? `<img class="detail-cover" src="${esc(cover)}" alt="Couverture" onerror="this.style.display='none'">` : `<div class="detail-cover">${placeholder(c)}</div>`}</div>
       <div>
         <div class="detail-badges">
           ${c.Editeur ? `<span class="detail-badge">${esc(c.Editeur)}</span>` : ""}
@@ -212,6 +318,14 @@ function showDetail(c) {
     </div>
   `;
   $("detail-dialog").showModal();
+
+  if (!cover) {
+    const found = await resolveWebCover(c);
+    const wrap = $("detail-cover-wrap");
+    if (found && wrap && $("detail-dialog").open) {
+      wrap.innerHTML = `<img class="detail-cover" src="${esc(found)}" alt="Couverture">`;
+    }
+  }
 }
 
 $("dialog-close").addEventListener("click", () => $("detail-dialog").close());
@@ -240,14 +354,9 @@ async function loadComics() {
   } catch (err) {
     status.textContent = "Erreur Google Sheets";
     status.title = err.message;
-    const isFileProtocol = location.protocol === "file:";
     $("grid").innerHTML = `<div class="empty" style="grid-column: 1 / -1;">
       <strong>Connexion à Google Sheets impossible</strong><br><br>
-      ${esc(err.message)}<br><br>
-      ${isFileProtocol
-        ? `<small>La page est ouverte en <code>file://</code> : lance un serveur local (ex. <code>npx serve</code> ou <code>python -m http.server</code>) puis ouvre l'adresse <code>http://localhost:...</code>.</small>`
-        : `<small>Vérifie qu'aucune extension du navigateur (bloqueur de pub / anti-pistage) ne bloque <code>docs.google.com</code>.</small>`
-      }
+      ${esc(err.message)}
     </div>`;
   }
 }
