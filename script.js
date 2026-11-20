@@ -6,6 +6,7 @@ let currentPublisher = "Tous";
 let currentTeam = "Toutes";
 let currentPeriod = "Toutes";
 let currentPage = 1;
+let zoomScale = 1;
 
 const PAGE_SIZE = 48;
 const $ = id => document.getElementById(id);
@@ -80,30 +81,32 @@ function rowsToComics(csv) {
     .filter(c => c.Titre || c.Editeur);
 }
 
+function getValidUrl(val) {
+  const s = clean(val);
+  return /^https?:\/\//i.test(s) ? s : "";
+}
+
 function getSheetCover(c) {
-  const direct = clean(c.Covers);
-  if (/^https?:\/\//i.test(direct)) return direct;
-  const planche = clean(c.Planche);
-  if (/^https?:\/\//i.test(planche)) return planche;
-  return "";
+  return getValidUrl(c.Covers);
+}
+
+function getSheetPlanche(c) {
+  return getValidUrl(c.Planche);
 }
 
 function parseDate(s) {
   const v = clean(s);
   if (!v) return NaN;
 
-  // JJ/MM/AAAA ou JJ-MM-AAAA (avec espaces éventuels)
   let m = v.match(/^(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{4})/);
   if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
 
-  // JJ/MM/AA
   m = v.match(/^(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2})$/);
   if (m) {
     const year = +m[3] >= 70 ? 1900 + +m[3] : 2000 + +m[3];
     return new Date(year, +m[2] - 1, +m[1]).getTime();
   }
 
-  // AAAA-MM-JJ ou AAAA/MM/JJ
   m = v.match(/^(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})/);
   if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
 
@@ -185,7 +188,6 @@ function getFiltered() {
       return isAsc ? 1 : -1;
     }
 
-    // Repli déterministe sur l'ordre d'apparition dans la feuille Google Sheets
     return isAsc ? a._rowIndex - b._rowIndex : b._rowIndex - a._rowIndex;
   });
 
@@ -378,6 +380,69 @@ function renderGrid() {
   });
 }
 
+function ensureLightboxDialog() {
+  let dlg = $("lightbox-dialog");
+  if (dlg) return dlg;
+
+  dlg = document.createElement("dialog");
+  dlg.id = "lightbox-dialog";
+  dlg.className = "lightbox-dialog";
+  dlg.innerHTML = `
+    <div class="lightbox-inner">
+      <div class="lightbox-toolbar">
+        <span class="lightbox-title" id="lightbox-title">Aperçu</span>
+        <div class="lightbox-actions">
+          <button type="button" class="lightbox-btn" id="lightbox-zoom-btn">Zoom +</button>
+          <button type="button" class="lightbox-btn" id="lightbox-close-btn">Fermer ✕</button>
+        </div>
+      </div>
+      <div class="lightbox-stage">
+        <img class="lightbox-img" id="lightbox-img" alt="Image agrandie">
+      </div>
+    </div>
+  `;
+  document.body.appendChild(dlg);
+
+  const img = $("lightbox-img");
+  const zoomBtn = $("lightbox-zoom-btn");
+
+  function setZoom(zoomed) {
+    zoomScale = zoomed ? 1.75 : 1;
+    img.classList.toggle("is-zoomed", zoomed);
+    zoomBtn.textContent = zoomed ? "Zoom 1x" : "Zoom +";
+  }
+
+  zoomBtn.addEventListener("click", () => setZoom(zoomScale === 1));
+  img.addEventListener("click", () => setZoom(zoomScale === 1));
+  $("lightbox-close-btn").addEventListener("click", () => {
+    setZoom(false);
+    dlg.close();
+  });
+  dlg.addEventListener("click", e => {
+    if (e.target === dlg) {
+      setZoom(false);
+      dlg.close();
+    }
+  });
+  dlg.addEventListener("close", () => setZoom(false));
+
+  return dlg;
+}
+
+function openLightbox(src, label) {
+  if (!src) return;
+  const dlg = ensureLightboxDialog();
+  const img = $("lightbox-img");
+  const titleEl = $("lightbox-title");
+  zoomScale = 1;
+  img.classList.remove("is-zoomed");
+  $("lightbox-zoom-btn").textContent = "Zoom +";
+  titleEl.textContent = label || "Aperçu";
+  img.src = src;
+  img.alt = label || "Image agrandie";
+  dlg.showModal();
+}
+
 function showDetail(c) {
   const fields = [
     ["Date de lecture", c.Date],
@@ -391,10 +456,29 @@ function showDetail(c) {
     ["Dessinateur", c.Dessinateur]
   ];
   const cover = getSheetCover(c);
+  const planche = getSheetPlanche(c);
+  const baseTitle = clean(c.Titre) || "Sans titre";
+
+  const coverBlock = cover
+    ? `<div class="zoomable-card" id="open-cover-zoom" title="Cliquer pour agrandir la jaquette">
+         <img src="${esc(cover)}" alt="Jaquette de ${esc(baseTitle)}">
+         <div class="zoom-label"><span>Jaquette</span><span>🔍 Agrandir</span></div>
+       </div>`
+    : `<div class="detail-cover">${placeholder(c)}</div>`;
+
+  const plancheBlock = planche
+    ? `<div class="zoomable-card" id="open-planche-zoom" title="Cliquer pour agrandir la planche">
+         <img src="${esc(planche)}" alt="Planche de ${esc(baseTitle)}">
+         <div class="zoom-label"><span>Planche</span><span>🔍 Agrandir</span></div>
+       </div>`
+    : "";
 
   $("detail-content").innerHTML = `
     <div class="detail-layout">
-      <div>${cover ? `<img class="detail-cover" src="${esc(cover)}" alt="Couverture">` : `<div class="detail-cover">${placeholder(c)}</div>`}</div>
+      <div class="detail-media-row">
+        ${coverBlock}
+        ${plancheBlock}
+      </div>
       <div>
         <div class="detail-badges">
           ${c.Editeur ? `<span class="detail-badge">${esc(c.Editeur)}</span>` : ""}
@@ -403,7 +487,7 @@ function showDetail(c) {
           ${c.num ? `<span class="detail-badge">N° ${esc(c.num)}</span>` : ""}
           ${isReread(c) ? `<span class="detail-badge reread">Lu 2 fois</span>` : ""}
         </div>
-        <h3 class="detail-title">${esc(c.Titre || "Sans titre")}</h3>
+        <h3 class="detail-title">${esc(baseTitle)}</h3>
         <div class="detail-list">
           ${fields.filter(x => clean(x[1])).map(x => `<div class="detail-field"><span>${esc(x[0])}</span><strong>${esc(x[1])}</strong></div>`).join("")}
         </div>
@@ -412,13 +496,22 @@ function showDetail(c) {
     </div>
   `;
 
-  const detailImg = $("detail-content").querySelector(".detail-cover[src]");
-  if (detailImg) {
-    detailImg.addEventListener("error", () => {
-      detailImg.replaceWith(Object.assign(document.createElement("div"), {
+  const coverZoomEl = $("open-cover-zoom");
+  if (coverZoomEl && cover) {
+    coverZoomEl.addEventListener("click", () => openLightbox(cover, `Jaquette — ${baseTitle}`));
+    coverZoomEl.querySelector("img")?.addEventListener("error", () => {
+      coverZoomEl.replaceWith(Object.assign(document.createElement("div"), {
         className: "detail-cover",
         innerHTML: placeholder(c)
       }));
+    }, { once: true });
+  }
+
+  const plancheZoomEl = $("open-planche-zoom");
+  if (plancheZoomEl && planche) {
+    plancheZoomEl.addEventListener("click", () => openLightbox(planche, `Planche — ${baseTitle}`));
+    plancheZoomEl.querySelector("img")?.addEventListener("error", () => {
+      plancheZoomEl.remove();
     }, { once: true });
   }
 
