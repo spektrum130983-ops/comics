@@ -72,7 +72,7 @@ function rowsToComics(csv) {
     throw Error("La feuille Google Sheets ne contient aucune ligne exploitable.");
   }
   const headers = rows[0].map(x => clean(x).replace(/^\uFEFF/, ""));
-const wanted = [
+  const wanted = [
     "Date", "Titre", "num", "vf", "vo", "Editeur",
     "Equipe", "Periode", "Auteur", "Dessinateur",
     "Résumé", "Covers", "Planche", "lu 2 fois", "#1"
@@ -331,12 +331,18 @@ function isReread(c) {
   return v && v !== "non" && v !== "0" && v !== "false";
 }
 
+function hasIssueOne(c) {
+  const v = clean(c["#1"]).toLowerCase();
+  return v !== "" && v !== "non" && v !== "0" && v !== "false";
+}
+
 function card(c, index) {
   const title = clean(c.Titre) || "Sans titre";
   const cover = getSheetCover(c);
   const metaParts = [clean(c.Equipe), clean(c.Periode), clean(c.Editeur)].filter(Boolean);
+  const goldClass = hasIssueOne(c) ? " has-gold-halo" : "";
   return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(title)}">
-    <div class="cover">
+    <div class="cover${goldClass}">
       ${placeholder(c)}
       ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(title)}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;">` : ""}
       ${c.num ? `<span class="issue" style="z-index:2;">${esc(formatIssueNum(c.num))}</span>` : ""}
@@ -559,6 +565,7 @@ function showDetail(c) {
   const planche = getSheetPlanche(c);
   const baseTitle = clean(c.Titre) || "Sans titre";
   const fullSeriesTitle = issueLabel ? `${issueLabel} ${baseTitle}` : baseTitle;
+  const goldClass = hasIssueOne(c) ? " has-gold-halo" : "";
 
   const coverCaption = issueLabel
     ? `<div class="cover-num-caption">${esc(issueLabel)} — ${esc(baseTitle)}</div>`
@@ -566,14 +573,14 @@ function showDetail(c) {
 
   const coverCol = cover
     ? `<div class="detail-col-cover">
-         <div class="zoomable-card" id="open-cover-zoom" title="Cliquer pour agrandir la jaquette">
+         <div class="zoomable-card${goldClass}" id="open-cover-zoom" title="Cliquer pour agrandir la jaquette">
            <img src="${esc(cover)}" alt="Jaquette de ${esc(fullSeriesTitle)}">
            <div class="zoom-label"><span>Jaquette</span><span>🔍 Agrandir</span></div>
          </div>
          ${coverCaption}
        </div>`
     : `<div class="detail-col-cover">
-         <div class="detail-cover">${placeholder(c)}</div>
+         <div class="detail-cover${goldClass}">${placeholder(c)}</div>
          ${coverCaption}
        </div>`;
 
@@ -595,6 +602,7 @@ function showDetail(c) {
           ${c.Equipe ? `<span class="detail-badge">${esc(c.Equipe)}</span>` : ""}
           ${c.Periode ? `<span class="detail-badge">${esc(c.Periode)}</span>` : ""}
           ${issueLabel ? `<span class="detail-badge">${esc(issueLabel)}</span>` : ""}
+          ${hasIssueOne(c) ? `<span class="detail-badge">#1</span>` : ""}
           ${isReread(c) ? `<span class="detail-badge reread">Lu 2 fois</span>` : ""}
         </div>
         <h3 class="detail-title">
@@ -614,7 +622,7 @@ function showDetail(c) {
     coverZoomEl.addEventListener("click", () => openLightbox(cover, `Jaquette — ${fullSeriesTitle}`));
     coverZoomEl.querySelector("img")?.addEventListener("error", () => {
       coverZoomEl.replaceWith(Object.assign(document.createElement("div"), {
-        className: "detail-cover",
+        className: `detail-cover${goldClass}`,
         innerHTML: placeholder(c)
       }));
     }, { once: true });
