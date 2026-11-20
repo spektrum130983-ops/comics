@@ -820,3 +820,134 @@ dialog[open] {
   padding-top: 24px;
   border-top: 1px solid var(--border);
 }
+.detail-media-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.zoomable-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: zoom-in;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.zoomable-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.zoomable-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: contain;
+  background: #0b0c10;
+}
+
+.zoom-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(15, 17, 24, 0.92);
+  border-top: 1px solid var(--border);
+}
+
+.lightbox-dialog {
+  max-width: 94vw;
+  max-height: 94vh;
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #0b0c10;
+  color: #fff;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.85);
+}
+
+.lightbox-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(6px);
+}
+
+.lightbox-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  gap: 12px;
+}
+
+.lightbox-toolbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lightbox-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.lightbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lightbox-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lightbox-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.lightbox-stage {
+  overflow: auto;
+  max-width: 88vw;
+  max-height: 78vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-img {
+  max-width: 86vw;
+  max-height: 76vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  transition: transform 0.2s ease;
+  cursor: zoom-in;
+}
+
+.lightbox-img.is-zoomed {
+  transform: scale(1.75);
+  transform-origin: center center;
+  cursor: zoom-out;
+}
