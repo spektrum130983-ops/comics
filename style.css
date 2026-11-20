@@ -1257,3 +1257,46 @@ dialog[open] {
   border-color: rgba(255, 212, 59, 0.65);
   box-shadow: 0 10px 30px rgba(245, 158, 11, 0.22);
 }
+.cover .issue {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5 !important;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
+  background: rgba(15, 17, 24, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.card-issue-prefix,
+.detail-issue-prefix {
+  display: inline-block !important;
+  margin-right: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: #ffd43b;
+  background: rgba(255, 212, 59, 0.14);
+  border: 1px solid rgba(255, 212, 59, 0.35);
+}
+
+.cover-num-caption {
+  display: block !important;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+}
