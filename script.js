@@ -69,8 +69,14 @@ function parseCSV(text) {
 function findColIndex(headers, candidates) {
   const normHeaders = headers.map(h => clean(h).toLowerCase().replace(/\s+/g, ""));
   for (const cand of candidates) {
-    const idx = normHeaders.indexOf(cand.toLowerCase().replace(/\s+/g, ""));
+    const normCand = cand.toLowerCase().replace(/\s+/g, "");
+    const idx = normHeaders.indexOf(normCand);
     if (idx !== -1) return idx;
+  }
+  for (const cand of candidates) {
+    const normCand = cand.toLowerCase().replace(/\s+/g, "");
+    const partialIdx = normHeaders.findIndex(h => h.includes(normCand));
+    if (partialIdx !== -1) return partialIdx;
   }
   return -1;
 }
@@ -97,7 +103,7 @@ function rowsToComics(csv) {
     Covers: findColIndex(headers, ["Covers", "Cover", "Jaquette"]),
     Planche: findColIndex(headers, ["Planche", "Planches"]),
     "lu 2 fois": findColIndex(headers, ["lu 2 fois", "lu2fois"]),
-    "#1": findColIndex(headers, ["#1", "1", "n°1", "numero1"]),
+    "#1": findColIndex(headers, ["#1", "1", "n°1", "numero1"])
   };
 
   if (colMap.Titre === -1 || colMap.Editeur === -1) {
@@ -370,11 +376,11 @@ function card(c, index) {
     <div class="cover${goldClass}">
       ${placeholder(c)}
       ${cover ? `<img class="comic-cover-img" src="${esc(cover)}" alt="Couverture de ${esc(titleWithNum)}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;">` : ""}
-      ${issueLabel ? `<span class="issue" style="z-index:2;">${esc(issueLabel)}</span>` : ""}
-      ${isReread(c) ? `<span class="reread-badge" style="z-index:2;" title="Lu 2 fois">2×</span>` : ""}
+      ${issueLabel ? `<span class="issue">${esc(issueLabel)}</span>` : ""}
+      ${isReread(c) ? `<span class="reread-badge" style="z-index:5;" title="Lu 2 fois">2×</span>` : ""}
     </div>
     <div class="comic-info">
-      <div class="comic-title" title="${esc(titleWithNum)}">${esc(titleWithNum)}</div>
+      <div class="comic-title" title="${esc(titleWithNum)}">${issueLabel ? `<span class="card-issue-prefix">${esc(issueLabel)}</span>` : ""}${esc(title)}</div>
       <div class="comic-meta">${esc(metaParts.slice(0, 2).join(" · ") || "Éditeur inconnu")}${c.Date ? " · " + esc(c.Date) : ""}</div>
     </div>
   </article>`;
