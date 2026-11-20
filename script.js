@@ -1,7 +1,7 @@
 // Connexion directe à Google Sheets (Lecture comics 2026 — Feuille 1, gid=0)
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1-Gwoxyi5A3h2DmtCrX_ySN8sBu0irqWMykvjpHB7b1w/gviz/tq?tqx=out:csv&gid=0";
 
-let comics = [], currentPublisher = "Tous", currentSaga = "Toutes", currentPage = 1;
+let comics = [], currentPublisher = "Tous", currentTeam = "Toutes", currentPeriod = "Toutes", currentPage = 1;
 const PAGE_SIZE = 48;
 const $ = id => document.getElementById(id);
 const clean = v => v == null ? "" : String(v).trim();
@@ -51,10 +51,6 @@ function getSheetCover(c) {
   return "";
 }
 
-function getSagaName(c) {
-  return clean(c.Equipe) || clean(c.Periode) || clean(c.Titre);
-}
-
 function parseDate(s) {
   if (!s) return 0;
   const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -70,15 +66,25 @@ function publisherList() {
   return [...new Set(comics.map(c => clean(c.Editeur)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
 }
 
-function sagaList(baseList = comics) {
+function teamList(baseList = comics) {
   const counts = {};
   baseList.forEach(c => {
-    const s = getSagaName(c);
-    if (s) counts[s] = (counts[s] || 0) + 1;
+    const eq = clean(c.Equipe);
+    if (eq) counts[eq] = (counts[eq] || 0) + 1;
   });
   return Object.entries(counts)
-    .filter(([, count]) => count >= 2 || baseList.length <= 60)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr"))
+    .map(([name, count]) => ({ name, count }));
+}
+
+function periodList(baseList = comics) {
+  const counts = {};
+  baseList.forEach(c => {
+    const per = clean(c.Periode);
+    if (per) counts[per] = (counts[per] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true }))
     .map(([name, count]) => ({ name, count }));
 }
 
@@ -86,8 +92,9 @@ function getFiltered() {
   const q = $("search").value.toLocaleLowerCase("fr").trim();
   let list = comics.filter(c => {
     const pubOk = currentPublisher === "Tous" || clean(c.Editeur) === currentPublisher;
-    const sagaOk = currentSaga === "Toutes" || getSagaName(c) === currentSaga;
-    return pubOk && sagaOk;
+    const teamOk = currentTeam === "Toutes" || clean(c.Equipe) === currentTeam;
+    const periodOk = currentPeriod === "Toutes" || clean(c.Periode) === currentPeriod;
+    return pubOk && teamOk && periodOk;
   });
   if (q) list = list.filter(c => ["Titre", "num", "vo", "vf", "Editeur", "Equipe", "Periode", "Auteur", "Dessinateur"].some(k => clean(c[k]).toLocaleLowerCase("fr").includes(q)));
   const sort = $("sort").value;
@@ -97,13 +104,13 @@ function getFiltered() {
 
 function renderStats() {
   const pub = publisherList();
-  const sagas = new Set(comics.map(getSagaName).filter(Boolean));
-  const sheetsCount = comics.filter(c => getSheetCover(c)).length;
+  const teams = new Set(comics.map(c => clean(c.Equipe)).filter(Boolean));
+  const periods = new Set(comics.map(c => clean(c.Periode)).filter(Boolean));
   $("stats").innerHTML = `
     <div class="stat"><strong>${comics.length.toLocaleString("fr-FR")}</strong><span>Comics lus</span></div>
     <div class="stat"><strong>${pub.length}</strong><span>Éditeurs</span></div>
-    <div class="stat"><strong>${sagas.size.toLocaleString("fr-FR")}</strong><span>Sagas / Séries</span></div>
-    <div class="stat"><strong>${sheetsCount.toLocaleString("fr-FR")}</strong><span>Jaquettes</span></div>
+    <div class="stat"><strong>${teams.size.toLocaleString("fr-FR")}</strong><span>Équipes</span></div>
+    <div class="stat"><strong>${periods.size.toLocaleString("fr-FR")}</strong><span>Périodes</span></div>
   `;
 }
 
@@ -113,31 +120,58 @@ function renderTabs() {
   $("tabs").innerHTML = ["Tous", ...publisherList()].map(p => `<button class="tab ${p === currentPublisher ? "active" : ""}" data-publisher="${esc(p)}">${esc(p)}<small>${p === "Tous" ? comics.length : counts[p]}</small></button>`).join("");
   $("tabs").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
     currentPublisher = b.dataset.publisher;
-    currentSaga = "Toutes";
+    currentTeam = "Toutes";
+    currentPeriod = "Toutes";
     currentPage = 1;
     renderTabs();
-    renderSagaTabs();
+    renderTeamTabs();
+    renderPeriodTabs();
     renderGrid();
   }));
 }
 
-function renderSagaTabs() {
-  const sagaContainer = $("saga-tabs");
-  if (!sagaContainer) return;
+function renderTeamTabs() {
+  const teamEl = $("team-tabs");
+  if (!teamEl) return;
   const scoped = currentPublisher === "Tous"
     ? comics
     : comics.filter(c => clean(c.Editeur) === currentPublisher);
-  const sagas = sagaList(scoped);
-  if (currentSaga !== "Toutes" && !sagas.some(s => s.name === currentSaga)) {
-    currentSaga = "Toutes";
+  const teams = teamList(scoped);
+  if (currentTeam !== "Toutes" && !teams.some(t => t.name === currentTeam)) {
+    currentTeam = "Toutes";
   }
-  const allItem = `<button class="tab ${currentSaga === "Toutes" ? "active" : ""}" data-saga="Toutes">Toutes les sagas<small>${scoped.length}</small></button>`;
-  const items = sagas.map(s => `<button class="tab ${s.name === currentSaga ? "active" : ""}" data-saga="${esc(s.name)}">${esc(s.name)}<small>${s.count}</small></button>`).join("");
-  sagaContainer.innerHTML = allItem + items;
-  sagaContainer.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    currentSaga = b.dataset.saga;
+  const allBtn = `<button class="tab ${currentTeam === "Toutes" ? "active" : ""}" data-team="Toutes">Toutes<small>${scoped.length}</small></button>`;
+  const btns = teams.map(t => `<button class="tab ${t.name === currentTeam ? "active" : ""}" data-team="${esc(t.name)}">${esc(t.name)}<small>${t.count}</small></button>`).join("");
+  teamEl.innerHTML = allBtn + btns;
+  teamEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    currentTeam = b.dataset.team;
+    currentPeriod = "Toutes";
     currentPage = 1;
-    renderSagaTabs();
+    renderTeamTabs();
+    renderPeriodTabs();
+    renderGrid();
+  }));
+}
+
+function renderPeriodTabs() {
+  const periodEl = $("period-tabs");
+  if (!periodEl) return;
+  const scoped = comics.filter(c => {
+    const pubOk = currentPublisher === "Tous" || clean(c.Editeur) === currentPublisher;
+    const teamOk = currentTeam === "Toutes" || clean(c.Equipe) === currentTeam;
+    return pubOk && teamOk;
+  });
+  const periods = periodList(scoped);
+  if (currentPeriod !== "Toutes" && !periods.some(p => p.name === currentPeriod)) {
+    currentPeriod = "Toutes";
+  }
+  const allBtn = `<button class="tab ${currentPeriod === "Toutes" ? "active" : ""}" data-period="Toutes">Toutes<small>${scoped.length}</small></button>`;
+  const btns = periods.map(p => `<button class="tab ${p.name === currentPeriod ? "active" : ""}" data-period="${esc(p.name)}">${esc(p.name)}<small>${p.count}</small></button>`).join("");
+  periodEl.innerHTML = allBtn + btns;
+  periodEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    currentPeriod = b.dataset.period;
+    currentPage = 1;
+    renderPeriodTabs();
     renderGrid();
   }));
 }
@@ -153,8 +187,9 @@ function publisherColor(pub) {
 }
 
 function placeholder(c) {
+  const labelTop = clean(c.Periode) || clean(c.Equipe) || "ARCHIVE";
   return `<div class="cover-placeholder" style="--ph-accent:${publisherColor(c.Editeur)}">
-    <span class="ph-top">${esc(getSagaName(c) || "ARCHIVE")}</span>
+    <span class="ph-top">${esc(labelTop)}</span>
     <b>${esc(c.Titre || "Comic")}</b>
     <small>${esc(c.Editeur || "COMIC BOOK")}</small>
   </div>`;
@@ -168,7 +203,7 @@ function isReread(c) {
 function card(c, index) {
   const title = clean(c.Titre) || "Sans titre";
   const cover = getSheetCover(c);
-  const saga = getSagaName(c);
+  const metaParts = [clean(c.Equipe), clean(c.Periode), clean(c.Editeur)].filter(Boolean);
   return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(title)}">
     <div class="cover">
       ${placeholder(c)}
@@ -178,7 +213,7 @@ function card(c, index) {
     </div>
     <div class="comic-info">
       <div class="comic-title" title="${esc(title)}">${esc(title)}</div>
-      <div class="comic-meta">${esc(saga || c.Editeur || "Éditeur inconnu")}${c.Date ? " · " + esc(c.Date) : ""}</div>
+      <div class="comic-meta">${esc(metaParts.slice(0, 2).join(" · ") || "Éditeur inconnu")}${c.Date ? " · " + esc(c.Date) : ""}</div>
     </div>
   </article>`;
 }
@@ -215,11 +250,11 @@ function showDetail(c) {
   const fields = [
     ["Date de lecture", c.Date],
     ["Éditeur", c.Editeur],
-    ["Saga / Équipe", getSagaName(c)],
+    ["Équipe", c.Equipe],
+    ["Période", c.Periode],
     ["Numéro", c.num ? "#" + c.num : ""],
     ["Titre VF", c.vf],
     ["Titre VO", c.vo],
-    ["Période", c.Periode],
     ["Scénariste", c.Auteur],
     ["Dessinateur", c.Dessinateur]
   ];
@@ -230,7 +265,8 @@ function showDetail(c) {
       <div>
         <div class="detail-badges">
           ${c.Editeur ? `<span class="detail-badge">${esc(c.Editeur)}</span>` : ""}
-          ${getSagaName(c) ? `<span class="detail-badge">${esc(getSagaName(c))}</span>` : ""}
+          ${c.Equipe ? `<span class="detail-badge">${esc(c.Equipe)}</span>` : ""}
+          ${c.Periode ? `<span class="detail-badge">${esc(c.Periode)}</span>` : ""}
           ${c.num ? `<span class="detail-badge">N° ${esc(c.num)}</span>` : ""}
           ${isReread(c) ? `<span class="detail-badge reread">Lu 2 fois</span>` : ""}
         </div>
@@ -276,7 +312,8 @@ async function loadComics() {
     dot.classList.add("connected");
     renderStats();
     renderTabs();
-    renderSagaTabs();
+    renderTeamTabs();
+    renderPeriodTabs();
     renderGrid();
   } catch (err) {
     status.textContent = "Erreur Google Sheets";
