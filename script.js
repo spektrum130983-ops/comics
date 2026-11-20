@@ -97,7 +97,7 @@ function rowsToComics(csv) {
     Covers: findColIndex(headers, ["Covers", "Cover", "Jaquette"]),
     Planche: findColIndex(headers, ["Planche", "Planches"]),
     "lu 2 fois": findColIndex(headers, ["lu 2 fois", "lu2fois"]),
-    "#1": findColIndex(headers, ["#1", "1"])
+    "#1": findColIndex(headers, ["#1", "1", "n°1", "numero1"]),
   };
 
   if (colMap.Titre === -1 || colMap.Editeur === -1) {
@@ -355,7 +355,7 @@ function isReread(c) {
 
 function hasIssueOne(c) {
   const v = clean(c["#1"]).toLowerCase();
-  return v !== "" && v !== "non" && v !== "0" && v !== "false";
+  return v !== "" && v !== "non" && v !== "0" && v !== "false" && v !== "-";
 }
 
 function card(c, index) {
