@@ -407,9 +407,9 @@ function ensureLightboxDialog() {
   const zoomBtn = $("lightbox-zoom-btn");
 
   function setZoom(zoomed) {
-    zoomScale = zoomed ? 1.75 : 1;
+    zoomScale = zoomed ? 1.65 : 1;
     img.classList.toggle("is-zoomed", zoomed);
-    zoomBtn.textContent = zoomed ? "Zoom 1x" : "Zoom +";
+    zoomBtn.textContent = zoomed ? "Adapter à l'écran" : "Zoom +";
   }
 
   zoomBtn.addEventListener("click", () => setZoom(zoomScale === 1));
@@ -475,7 +475,7 @@ function showDetail(c) {
 
   $("detail-content").innerHTML = `
     <div class="detail-layout">
-      <div class="detail-media-row">
+      <div class="detail-media-row" style="display:flex;flex-direction:row;flex-wrap:nowrap;gap:14px;align-items:flex-start;">
         ${coverBlock}
         ${plancheBlock}
       </div>
