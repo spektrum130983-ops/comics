@@ -8,7 +8,7 @@ const clean = v => v == null ? "" : String(v).trim();
 const esc = s => clean(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // Cache local des couvertures trouvées sur le web
-const COVER_CACHE_KEY = "comicshelf_web_covers_v1";
+const COVER_CACHE_KEY = "comicshelf_web_covers_v2";
 let coverCache = {};
 try {
   coverCache = JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || "{}");
@@ -31,12 +31,13 @@ async function fetchFromOpenLibrary(c) {
   const title = clean(c.Titre);
   const num = clean(c.num).replace(/^#/, "");
   const queryParts = [title, num ? `#${num}` : "", clean(c.Editeur)].filter(Boolean);
-  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(queryParts.join(" "))}&limit=6&fields=title,cover_i,publisher`;
+  if (!queryParts.length) return null;
+  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(queryParts.join(" "))}&limit=5&fields=cover_i`;
   const res = await fetch(url);
   if (!res.ok) return null;
   const data = await res.json();
   const docs = Array.isArray(data.docs) ? data.docs : [];
-  const match = docs.find(d => d.cover_i);
+  const match = docs.find(d => d && d.cover_i);
   return match ? `https://covers.openlibrary.org/b/id/${match.cover_i}-L.jpg?default=false` : null;
 }
 
@@ -53,7 +54,7 @@ async function fetchFromWikipedia(c) {
     if (!res.ok) continue;
     const data = await res.json();
     const pages = Object.values(data?.query?.pages || {});
-    const withImg = pages.find(p => p.thumbnail?.source);
+    const withImg = pages.find(p => p && p.thumbnail && p.thumbnail.source);
     if (withImg) return withImg.thumbnail.source;
   }
   return null;
@@ -89,14 +90,13 @@ function hydrateMissingCovers(visibleComics) {
     if (!slot) return;
 
     resolveWebCover(c).then(url => {
-      if (!url) return;
+      if (!url || !slot.isConnected) return;
       c._resolvedCover = url;
       const img = document.createElement("img");
       img.src = url;
       img.alt = `Couverture de ${clean(c.Titre) || "Comic"}`;
-      img.loading = "lazy";
       img.onload = () => {
-        if (img.naturalWidth > 20) {
+        if (img.naturalWidth > 20 && slot.isConnected) {
           slot.querySelector(".cover-placeholder")?.remove();
           slot.prepend(img);
         }
@@ -127,39 +127,6 @@ function parseCSV(text) {
   return rows;
 }
 
-const KNOWN_PUBLISHERS = ["marvel", "dc", "image", "dark horse", "vertigo", "valiant", "top cow", "urban", "panini", "delcourt", "soleil", "glénat"];
-
-function normalizeComicRow(raw) {
-  const c = { ...raw };
-  const ed = clean(c.Editeur).toLowerCase();
-  const isKnownEd = KNOWN_PUBLISHERS.some(p => ed === p || ed.startsWith(p + " "));
-
-  if (!isKnownEd && clean(c.Editeur)) {
-    const candidateEd = [c.vo, c.vf, c.Equipe].map(clean).find(v =>
-      KNOWN_PUBLISHERS.some(p => v.toLowerCase() === p || v.toLowerCase().startsWith(p + " "))
-    );
-    if (candidateEd) {
-      return {
-        Date: c.Date,
-        Titre: c.Titre,
-        num: c.num,
-        vf: "",
-        vo: c.vf || c.vo,
-        Editeur: c.vo,
-        Equipe: c.Editeur,
-        Periode: "",
-        Auteur: c.Equipe,
-        Dessinateur: c.Periode,
-        Résumé: "",
-        Covers: clean(c.Auteur).startsWith("http") ? c.Auteur : (clean(c.Dessinateur).startsWith("http") ? c.Dessinateur : c.Covers),
-        Planche: c.Planche,
-        "lu 2 fois": c["lu 2 fois"]
-      };
-    }
-  }
-  return c;
-}
-
 function rowsToComics(csv) {
   const rows = parseCSV(csv);
   if (rows.length < 2) throw Error("La feuille Google Sheets ne contient aucune ligne exploitable.");
@@ -173,9 +140,9 @@ function rowsToComics(csv) {
     .map(r => {
       const c = {};
       wanted.forEach((h, i) => { c[h] = indexes[i] >= 0 ? clean(r[indexes[i]]) : ""; });
-      return normalizeComicRow(c);
+      return c;
     })
-    .filter(c => clean(c.Titre) && /^\d{2}\/\d{2}\/\d{4}$/.test(clean(c.Date)));
+    .filter(c => c.Titre || c.Editeur);
 }
 
 function parseDate(s) {
@@ -252,7 +219,7 @@ function card(c, index, slotIndex) {
   const cover = clean(c.Covers) || c._resolvedCover || coverCache[comicCacheKey(c)] || "";
   return `<article class="comic-card" data-index="${index}" tabindex="0" role="button" aria-label="Détails : ${esc(title)}">
     <div class="cover" data-cover-slot="${slotIndex}">
-      ${cover ? `<img src="${esc(cover)}" alt="Couverture de ${esc(title)}" loading="lazy" onerror="this.remove();this.parentElement.insertAdjacentHTML('beforeend', '${placeholder(c).replace(/'/g, "&#39;")}')">` : placeholder(c)}
+      ${cover ? `<img src="${esc(cover)}" alt="Couverture de ${esc(title)}" onerror="this.remove();this.parentElement.insertAdjacentHTML('beforeend', '${placeholder(c).replace(/'/g, "&#39;")}')">` : placeholder(c)}
       ${c.num ? `<span class="issue">#${esc(c.num)}</span>` : ""}
       ${isReread(c) ? `<span class="reread-badge" title="Lu 2 fois">2×</span>` : ""}
     </div>
@@ -283,7 +250,6 @@ function renderGrid() {
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
   });
 
-  // Recherche automatique des jaquettes manquantes pour la page affichée
   hydrateMissingCovers(visible);
 }
 
