@@ -100,8 +100,15 @@ function getFiltered() {
     return pubOk && teamOk && periodOk;
   });
   if (q) list = list.filter(c => ["Titre", "num", "vo", "vf", "Editeur", "Equipe", "Periode", "Auteur", "Dessinateur"].some(k => clean(c[k]).toLocaleLowerCase("fr").includes(q)));
-  const sort = $("sort").value;
-  list.sort((a, b) => sort === "title" ? clean(a.Titre).localeCompare(clean(b.Titre), "fr") : sort === "number" ? issueNum(a.num) - issueNum(b.num) : sort === "date-asc" ? parseDate(a.Date) - parseDate(b.Date) : parseDate(b.Date) - parseDate(a.Date));
+const sort = $("sort").value;
+  list.sort((a, b) => {
+    if (sort === "title") return clean(a.Titre).localeCompare(clean(b.Titre), "fr");
+    if (sort === "number") return issueNum(a.num) - issueNum(b.num);
+    const da = parseDate(a.Date);
+    const db = parseDate(b.Date);
+    if (sort === "date-asc") return da - db;
+    return db - da;
+  });
   return list;
 }
 
