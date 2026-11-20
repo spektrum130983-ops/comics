@@ -1075,12 +1075,15 @@ dialog[open] {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  overflow: auto;
+  overflow: hidden;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
+  touch-action: none;
+  user-select: none;
 }
 
 .lightbox-img {
@@ -1089,19 +1092,21 @@ dialog[open] {
   width: auto;
   height: auto;
   object-fit: contain;
-  transition: transform 0.2s ease;
+  transform-origin: center center;
+  transition: transform 0.12s ease-out;
   cursor: zoom-in;
+  -webkit-user-drag: none;
 }
 
 .lightbox-img.is-zoomed {
-  max-width: none;
-  max-height: none;
-  width: auto;
-  height: auto;
-  transform: scale(1.65);
-  transform-origin: center center;
-  cursor: zoom-out;
+  cursor: grab;
+  transition: none;
 }
+
+.lightbox-img.is-dragging {
+  cursor: grabbing;
+}
+
 
 @media (max-width: 560px) {
   .detail-media-row {
