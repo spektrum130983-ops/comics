@@ -459,27 +459,28 @@ function showDetail(c) {
   const planche = getSheetPlanche(c);
   const baseTitle = clean(c.Titre) || "Sans titre";
 
-  const coverBlock = cover
-    ? `<div class="zoomable-card" id="open-cover-zoom" title="Cliquer pour agrandir la jaquette">
-         <img src="${esc(cover)}" alt="Jaquette de ${esc(baseTitle)}">
-         <div class="zoom-label"><span>Jaquette</span><span>🔍 Agrandir</span></div>
+  const coverCol = cover
+    ? `<div class="detail-col-cover">
+         <div class="zoomable-card" id="open-cover-zoom" title="Cliquer pour agrandir la jaquette">
+           <img src="${esc(cover)}" alt="Jaquette de ${esc(baseTitle)}">
+           <div class="zoom-label"><span>Jaquette</span><span>🔍 Agrandir</span></div>
+         </div>
        </div>`
-    : `<div class="detail-cover">${placeholder(c)}</div>`;
+    : `<div class="detail-col-cover"><div class="detail-cover">${placeholder(c)}</div></div>`;
 
-  const plancheBlock = planche
-    ? `<div class="zoomable-card" id="open-planche-zoom" title="Cliquer pour agrandir la planche">
-         <img src="${esc(planche)}" alt="Planche de ${esc(baseTitle)}">
-         <div class="zoom-label"><span>Planche</span><span>🔍 Agrandir</span></div>
+  const plancheCol = planche
+    ? `<div class="detail-col-planche">
+         <div class="zoomable-card" id="open-planche-zoom" title="Cliquer pour agrandir la planche">
+           <img src="${esc(planche)}" alt="Planche de ${esc(baseTitle)}">
+           <div class="zoom-label"><span>Planche</span><span>🔍 Agrandir</span></div>
+         </div>
        </div>`
     : "";
 
   $("detail-content").innerHTML = `
     <div class="detail-layout">
-      <div class="detail-media-row" style="display:flex;flex-direction:row;flex-wrap:nowrap;gap:14px;align-items:flex-start;">
-        ${coverBlock}
-        ${plancheBlock}
-      </div>
-      <div>
+      ${coverCol}
+      <div class="detail-col-info">
         <div class="detail-badges">
           ${c.Editeur ? `<span class="detail-badge">${esc(c.Editeur)}</span>` : ""}
           ${c.Equipe ? `<span class="detail-badge">${esc(c.Equipe)}</span>` : ""}
@@ -493,6 +494,7 @@ function showDetail(c) {
         </div>
         ${c["Résumé"] ? `<p class="detail-summary">${esc(c["Résumé"])}</p>` : ""}
       </div>
+      ${plancheCol}
     </div>
   `;
 
@@ -511,7 +513,7 @@ function showDetail(c) {
   if (plancheZoomEl && planche) {
     plancheZoomEl.addEventListener("click", () => openLightbox(planche, `Planche — ${baseTitle}`));
     plancheZoomEl.querySelector("img")?.addEventListener("error", () => {
-      plancheZoomEl.remove();
+      plancheZoomEl.closest(".detail-col-planche")?.remove();
     }, { once: true });
   }
 
