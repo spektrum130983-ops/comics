@@ -24,13 +24,31 @@
   </header>
 
   <main class="page">
-    <section class="hero">
-      <div class="hero-content">
-        <div class="eyebrow">ARCHIVE &amp; COLLECTION PERSONNELLE</div>
-        <h1>Mes comics<span class="accent">.</span></h1>
-        <p class="hero-copy">Explore tes lectures, tes séries cultes et tes univers favoris synchronisés en direct.</p>
+   <section class="hero">
+      <div class="hero-main">
+        <div class="hero-content">
+          <div class="eyebrow">ARCHIVE &amp; COLLECTION PERSONNELLE</div>
+          <h1>Mes comics<span class="accent">.</span></h1>
+          <p class="hero-copy">Explore tes lectures, tes séries cultes et tes univers favoris synchronisés en direct.</p>
+        </div>
+        <div class="stats" id="stats"></div>
       </div>
-      <div class="stats" id="stats"></div>
+
+      <aside class="hero-spotlight" id="hero-spotlight" hidden aria-label="Comic mis en avant">
+        <div class="spotlight-halftone" aria-hidden="true"></div>
+        <div class="spotlight-card" id="spotlight-card" tabindex="0" role="button">
+          <span class="spotlight-sticker">★ À LA UNE</span>
+          <button type="button" class="spotlight-reroll" id="spotlight-reroll" title="Tirer un autre comic au hasard" aria-label="Autre comic aléatoire">↻</button>
+          <div class="spotlight-frame">
+            <img id="spotlight-img" alt="">
+          </div>
+          <div class="spotlight-caption">
+            <span class="spotlight-issue" id="spotlight-issue"></span>
+            <strong class="spotlight-title" id="spotlight-title"></strong>
+            <small class="spotlight-meta" id="spotlight-meta"></small>
+          </div>
+        </div>
+      </aside>
     </section>
 
     <section class="library">
