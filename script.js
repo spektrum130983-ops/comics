@@ -96,18 +96,28 @@ function findExactColIndex(headers, candidates) {
 function resolveNumColIndex(headers) {
   const idx = findColIndex(headers, ["num", "numero", "numéro", "n°", "no"]);
   if (idx !== -1) return idx;
+  // Colonne C dans Google Sheets = index 2 (A=0, B=1, C=2)
   return headers.length > 2 ? 2 : -1;
+}
+
+function resolveCoverColIndex(headers) {
+  const idx = findColIndex(headers, ["covers", "cover", "jaquette"]);
+  if (idx !== -1) return idx;
+  // Colonne L dans Google Sheets = index 11 (A=0 .. K=10, L=11)
+  return headers.length > 11 ? 11 : -1;
 }
 
 function resolveIssueOneColIndex(headers) {
   const exactIdx = findExactColIndex(headers, ["#1", "1"]);
   if (exactIdx !== -1) return exactIdx;
+  // Colonne O dans Google Sheets = index 14 (A=0 .. N=13, O=14)
   return headers.length > 14 ? 14 : -1;
 }
 
 function resolveEventColIndex(headers) {
   const idx = findColIndex(headers, ["event", "events", "événement", "evenement", "événements", "evenements"]);
   if (idx !== -1) return idx;
+  // Colonne Q dans Google Sheets = index 16 (A=0 .. P=15, Q=16)
   return headers.length > 16 ? 16 : -1;
 }
 
@@ -131,7 +141,7 @@ function rowsToComics(csv) {
     Auteur: findColIndex(headers, ["Auteur", "Scénariste"]),
     Dessinateur: findColIndex(headers, ["Dessinateur"]),
     "Résumé": findColIndex(headers, ["Résumé", "Resume"]),
-    Covers: findColIndex(headers, ["Covers", "Cover", "Jaquette"]),
+    Covers: resolveCoverColIndex(headers),
     Planche: findColIndex(headers, ["Planche", "Planches"]),
     "lu 2 fois": findColIndex(headers, ["lu 2 fois", "lu2fois"]),
     "#1": resolveIssueOneColIndex(headers)
@@ -154,7 +164,12 @@ function rowsToComics(csv) {
 
 function getValidUrl(val) {
   const s = clean(val);
-  return /^https?:\/\//i.test(s) ? s : "";
+  if (!/^https?:\/\//i.test(s)) return "";
+  const driveMatch = s.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+  if (driveMatch) {
+    return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+  }
+  return s;
 }
 
 function getSheetCover(c) {
@@ -295,12 +310,11 @@ function getFiltered() {
 
 function renderSpotlight(attempts = 0) {
   const box = $("hero-spotlight");
-  const cardEl = $("spotlight-card");
-  const imgEl = $("spotlight-img");
-  if (!box || !cardEl || !imgEl) return;
+  const frameEl = $("spotlight-frame");
+  if (!box || !frameEl) return;
 
   const pool = getScopeBase().filter(c => getSheetCover(c));
-  if (!pool.length || attempts > 8) {
+  if (!pool.length || attempts > 12) {
     box.style.display = "none";
     return;
   }
@@ -319,15 +333,13 @@ function renderSpotlight(attempts = 0) {
     .slice(0, 2)
     .join(" · ");
 
-  imgEl.onerror = () => {
-    renderSpotlight(attempts + 1);
-  };
-  imgEl.src = cover;
-  imgEl.alt = `Couverture de ${issueLabel ? issueLabel + " " : ""}${title}`;
+  frameEl.innerHTML = `<img id="spotlight-img" src="${esc(cover)}" alt="Couverture de ${esc(title)}">`;
+  const imgEl = $("spotlight-img");
+  imgEl.onerror = () => renderSpotlight(attempts + 1);
+
   $("spotlight-issue").textContent = issueLabel || "ÉDITION";
   $("spotlight-title").textContent = title;
   $("spotlight-meta").textContent = meta || "Collection personnelle";
-
   box.style.display = "flex";
 }
 
