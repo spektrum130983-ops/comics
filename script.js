@@ -96,21 +96,18 @@ function findExactColIndex(headers, candidates) {
 function resolveNumColIndex(headers) {
   const idx = findColIndex(headers, ["num", "numero", "numéro", "n°", "no"]);
   if (idx !== -1) return idx;
-  // Colonne C dans Google Sheets = index 2 (A=0, B=1, C=2)
   return headers.length > 2 ? 2 : -1;
 }
 
 function resolveIssueOneColIndex(headers) {
   const exactIdx = findExactColIndex(headers, ["#1", "1"]);
   if (exactIdx !== -1) return exactIdx;
-  // Colonne O dans Google Sheets = index 14 (A=0 .. N=13, O=14)
   return headers.length > 14 ? 14 : -1;
 }
 
 function resolveEventColIndex(headers) {
   const idx = findColIndex(headers, ["event", "events", "événement", "evenement", "événements", "evenements"]);
   if (idx !== -1) return idx;
-  // Colonne Q dans Google Sheets = index 16 (A=0 .. P=15, Q=16)
   return headers.length > 16 ? 16 : -1;
 }
 
@@ -304,7 +301,7 @@ function renderSpotlight(attempts = 0) {
 
   const pool = getScopeBase().filter(c => getSheetCover(c));
   if (!pool.length || attempts > 8) {
-    box.hidden = true;
+    box.style.display = "none";
     return;
   }
 
@@ -331,7 +328,7 @@ function renderSpotlight(attempts = 0) {
   $("spotlight-title").textContent = title;
   $("spotlight-meta").textContent = meta || "Collection personnelle";
 
-  box.hidden = false;
+  box.style.display = "flex";
 }
 
 function ensureIssueOneFilterButton() {
