@@ -8,6 +8,7 @@ let currentPeriod = "Toutes";
 let currentEvent = "Tous";
 let onlyIssueOne = false;
 let currentPage = 1;
+let spotlightComic = null;
 
 const ZOOM_FACTOR = 1.8;
 let zoomState = {
@@ -295,6 +296,44 @@ function getFiltered() {
   return list;
 }
 
+function renderSpotlight(attempts = 0) {
+  const box = $("hero-spotlight");
+  const cardEl = $("spotlight-card");
+  const imgEl = $("spotlight-img");
+  if (!box || !cardEl || !imgEl) return;
+
+  const pool = getScopeBase().filter(c => getSheetCover(c));
+  if (!pool.length || attempts > 8) {
+    box.hidden = true;
+    return;
+  }
+
+  const candidates = pool.length > 1 && spotlightComic
+    ? pool.filter(c => c !== spotlightComic)
+    : pool;
+
+  spotlightComic = candidates[Math.floor(Math.random() * candidates.length)];
+
+  const cover = getSheetCover(spotlightComic);
+  const issueLabel = formatIssueNum(spotlightComic.num);
+  const title = clean(spotlightComic.Titre) || "Sans titre";
+  const meta = [clean(spotlightComic.Editeur), clean(spotlightComic.Equipe), clean(spotlightComic.Periode)]
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(" · ");
+
+  imgEl.onerror = () => {
+    renderSpotlight(attempts + 1);
+  };
+  imgEl.src = cover;
+  imgEl.alt = `Couverture de ${issueLabel ? issueLabel + " " : ""}${title}`;
+  $("spotlight-issue").textContent = issueLabel || "ÉDITION";
+  $("spotlight-title").textContent = title;
+  $("spotlight-meta").textContent = meta || "Collection personnelle";
+
+  box.hidden = false;
+}
+
 function ensureIssueOneFilterButton() {
   let btn = $("issue-one-filter-btn");
   if (!btn) {
@@ -320,6 +359,7 @@ function ensureIssueOneFilterButton() {
       currentPage = 1;
       renderAllFilters();
       renderGrid();
+      renderSpotlight();
     });
   }
 
@@ -813,6 +853,22 @@ function showDetail(c) {
   $("detail-dialog").showModal();
 }
 
+$("spotlight-card")?.addEventListener("click", () => {
+  if (spotlightComic) showDetail(spotlightComic);
+});
+
+$("spotlight-card")?.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && spotlightComic) {
+    e.preventDefault();
+    showDetail(spotlightComic);
+  }
+});
+
+$("spotlight-reroll")?.addEventListener("click", e => {
+  e.stopPropagation();
+  renderSpotlight();
+});
+
 $("dialog-close")?.addEventListener("click", () => $("detail-dialog").close());
 $("detail-dialog")?.addEventListener("click", e => {
   if (e.target === $("detail-dialog")) $("detail-dialog").close();
@@ -847,6 +903,7 @@ async function loadComics() {
     if (dot) dot.classList.add("connected");
     renderAllFilters();
     renderGrid();
+    renderSpotlight();
   } catch (err) {
     if (status) {
       status.textContent = "Erreur Google Sheets";
