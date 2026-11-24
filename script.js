@@ -5,6 +5,7 @@ let comics = [];
 let currentPublisher = "Tous";
 let currentTeam = "Toutes";
 let currentPeriod = "Toutes";
+let currentEvent = "Tous";
 let onlyIssueOne = false;
 let currentPage = 1;
 
@@ -121,6 +122,7 @@ function rowsToComics(csv) {
     Editeur: findColIndex(headers, ["Editeur", "Éditeur"]),
     Equipe: findColIndex(headers, ["Equipe", "Équipe", "Equipes", "Équipes"]),
     Periode: findColIndex(headers, ["Periode", "Période"]),
+    Event: findColIndex(headers, ["Event", "Events", "Événement", "Evenement", "Événements", "Evenements", "Saga", "Crossover"]),
     Auteur: findColIndex(headers, ["Auteur", "Scénariste"]),
     Dessinateur: findColIndex(headers, ["Dessinateur"]),
     "Résumé": findColIndex(headers, ["Résumé", "Resume"]),
@@ -224,7 +226,16 @@ function periodList(baseList = getScopeBase()) {
     .sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true }))
     .map(([name, count]) => ({ name, count }));
 }
-
+function eventList(baseList = getScopeBase()) {
+  const counts = {};
+  baseList.forEach(c => {
+    const ev = clean(c.Event);
+    if (ev) counts[ev] = (counts[ev] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr"))
+    .map(([name, count]) => ({ name, count }));
+}
 function getFiltered() {
   const q = $("search") ? $("search").value.toLocaleLowerCase("fr").trim() : "";
   let list = comics.filter(c => {
@@ -232,12 +243,13 @@ function getFiltered() {
     const pubOk = currentPublisher === "Tous" || clean(c.Editeur) === currentPublisher;
     const teamOk = currentTeam === "Toutes" || clean(c.Equipe) === currentTeam;
     const periodOk = currentPeriod === "Toutes" || clean(c.Periode) === currentPeriod;
-    return oneOk && pubOk && teamOk && periodOk;
+    const eventOk = currentEvent === "Tous" || clean(c.Event) === currentEvent;
+    return oneOk && pubOk && teamOk && periodOk && eventOk;
   });
 
   if (q) {
     list = list.filter(c =>
-      ["Titre", "num", "vo", "vf", "Editeur", "Equipe", "Periode", "Auteur", "Dessinateur"]
+      ["Titre", "num", "vo", "vf", "Editeur", "Equipe", "Periode", "Event", "Auteur", "Dessinateur"]
         .some(k => clean(c[k]).toLocaleLowerCase("fr").includes(q))
     );
   }
@@ -411,12 +423,44 @@ function renderPeriodTabs() {
   });
 }
 
+function renderEventTabs() {
+  const eventEl = $("event-tabs");
+  if (!eventEl) return;
+  const base = getScopeBase();
+  const scoped = base.filter(c => {
+    const pubOk = currentPublisher === "Tous" || clean(c.Editeur) === currentPublisher;
+    const teamOk = currentTeam === "Toutes" || clean(c.Equipe) === currentTeam;
+    const periodOk = currentPeriod === "Toutes" || clean(c.Periode) === currentPeriod;
+    return pubOk && teamOk && periodOk;
+  });
+  const events = eventList(scoped);
+  if (currentEvent !== "Tous" && !events.some(e => e.name === currentEvent)) {
+    currentEvent = "Tous";
+  }
+
+  const allBtn = `<button class="tab ${currentEvent === "Tous" ? "active" : ""}" data-event="Tous">Tous<small>${scoped.length}</small></button>`;
+  const btns = events
+    .map(e => `<button class="tab ${e.name === currentEvent ? "active" : ""}" data-event="${esc(e.name)}">${esc(e.name)}<small>${e.count}</small></button>`)
+    .join("");
+
+  eventEl.innerHTML = allBtn + btns;
+  eventEl.querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => {
+      currentEvent = b.dataset.event;
+      currentPage = 1;
+      renderEventTabs();
+      renderGrid();
+    });
+  });
+}
+
 function renderAllFilters() {
   ensureIssueOneFilterButton();
   renderStats();
   renderTabs();
   renderTeamTabs();
   renderPeriodTabs();
+  renderEventTabs();
 }
 
 function publisherColor(pub) {
