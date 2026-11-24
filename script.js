@@ -106,6 +106,13 @@ function resolveIssueOneColIndex(headers) {
   return headers.length > 14 ? 14 : -1;
 }
 
+function resolveEventColIndex(headers) {
+  const idx = findColIndex(headers, ["event", "events", "événement", "evenement", "événements", "evenements"]);
+  if (idx !== -1) return idx;
+  // Colonne Q dans Google Sheets = index 16 (A=0 .. P=15, Q=16)
+  return headers.length > 16 ? 16 : -1;
+}
+
 function rowsToComics(csv) {
   const rows = parseCSV(csv);
   if (rows.length < 2) {
@@ -122,7 +129,7 @@ function rowsToComics(csv) {
     Editeur: findColIndex(headers, ["Editeur", "Éditeur"]),
     Equipe: findColIndex(headers, ["Equipe", "Équipe", "Equipes", "Équipes"]),
     Periode: findColIndex(headers, ["Periode", "Période"]),
-    Event: findColIndex(headers, ["Event", "Events", "Événement", "Evenement", "Événements", "Evenements", "Saga", "Crossover"]),
+    Event: resolveEventColIndex(headers),
     Auteur: findColIndex(headers, ["Auteur", "Scénariste"]),
     Dessinateur: findColIndex(headers, ["Dessinateur"]),
     "Résumé": findColIndex(headers, ["Résumé", "Resume"]),
@@ -226,6 +233,7 @@ function periodList(baseList = getScopeBase()) {
     .sort((a, b) => a[0].localeCompare(b[0], "fr", { numeric: true }))
     .map(([name, count]) => ({ name, count }));
 }
+
 function eventList(baseList = getScopeBase()) {
   const counts = {};
   baseList.forEach(c => {
@@ -236,6 +244,7 @@ function eventList(baseList = getScopeBase()) {
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr"))
     .map(([name, count]) => ({ name, count }));
 }
+
 function getFiltered() {
   const q = $("search") ? $("search").value.toLocaleLowerCase("fr").trim() : "";
   let list = comics.filter(c => {
@@ -307,6 +316,7 @@ function ensureIssueOneFilterButton() {
       currentPublisher = "Tous";
       currentTeam = "Toutes";
       currentPeriod = "Toutes";
+      currentEvent = "Tous";
       currentPage = 1;
       renderAllFilters();
       renderGrid();
@@ -354,10 +364,12 @@ function renderTabs() {
       currentPublisher = b.dataset.publisher;
       currentTeam = "Toutes";
       currentPeriod = "Toutes";
+      currentEvent = "Tous";
       currentPage = 1;
       renderTabs();
       renderTeamTabs();
       renderPeriodTabs();
+      renderEventTabs();
       renderGrid();
     });
   });
@@ -385,9 +397,11 @@ function renderTeamTabs() {
     b.addEventListener("click", () => {
       currentTeam = b.dataset.team;
       currentPeriod = "Toutes";
+      currentEvent = "Tous";
       currentPage = 1;
       renderTeamTabs();
       renderPeriodTabs();
+      renderEventTabs();
       renderGrid();
     });
   });
@@ -416,8 +430,10 @@ function renderPeriodTabs() {
   periodEl.querySelectorAll("button").forEach(b => {
     b.addEventListener("click", () => {
       currentPeriod = b.dataset.period;
+      currentEvent = "Tous";
       currentPage = 1;
       renderPeriodTabs();
+      renderEventTabs();
       renderGrid();
     });
   });
@@ -712,6 +728,7 @@ function showDetail(c) {
     ["Éditeur", c.Editeur],
     ["Équipe", c.Equipe],
     ["Période", c.Periode],
+    ["Event", c.Event],
     ["Titre VF", c.vf],
     ["Titre VO", c.vo],
     ["Scénariste", c.Auteur],
@@ -757,6 +774,7 @@ function showDetail(c) {
           ${c.Editeur ? `<span class="detail-badge">${esc(c.Editeur)}</span>` : ""}
           ${c.Equipe ? `<span class="detail-badge">${esc(c.Equipe)}</span>` : ""}
           ${c.Periode ? `<span class="detail-badge">${esc(c.Periode)}</span>` : ""}
+          ${c.Event ? `<span class="detail-badge">${esc(c.Event)}</span>` : ""}
           ${issueLabel ? `<span class="detail-badge">${esc(issueLabel)}</span>` : ""}
           ${hasIssueOne(c) ? `<span class="detail-badge">#1</span>` : ""}
           ${isReread(c) ? `<span class="detail-badge reread">Lu 2 fois</span>` : ""}
